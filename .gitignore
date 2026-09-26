@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+.claude/
+.venv/
+__pycache__/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+node_modules/
