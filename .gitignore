@@ -3,6 +3,10 @@
 !.env.example
 .claude/
 .venv/
+.uv-cache/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 __pycache__/
 *.sqlite
 *.sqlite-shm
