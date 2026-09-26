@@ -1,0 +1,54 @@
+[project]
+name = "pcg"
+version = "0.0.0"
+description = "Prompt Cache Gateway"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "httpx",
+    "pydantic",
+    "pydantic-settings",
+    "uvicorn",
+]
+
+[dependency-groups]
+dev = [
+    "mypy",
+    "pip-audit",
+    "pre-commit",
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+[tool.pytest.ini_options]
+addopts = "-q --strict-markers"
+asyncio_mode = "auto"
+markers = [
+    "proxy: proxy tests",
+    "detector: cache-bust detector tests",
+    "classify: classification tests",
+    "semantic: semantic cache tests",
+    "admin: admin API tests",
+    "corpus: trace corpus tests",
+    "integration: tests requiring live external services",
+]
