@@ -20,3 +20,7 @@ uv run mypy src/
 uv run pytest -q
 uv run python -c "import pcg"
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
