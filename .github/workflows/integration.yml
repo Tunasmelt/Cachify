@@ -1,0 +1,31 @@
+# Runs live-provider and Qdrant Cloud tests using repository secrets.
+# Manual trigger only — must never run on pull_request (including from forks),
+# which would expose these secrets to untrusted code.
+name: Integration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install uv
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: "latest"
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install dependencies
+        run: uv sync
+      - name: Run live integration tests
+        env:
+          PCG_ANTHROPIC_API_KEY: ${{ secrets.PCG_ANTHROPIC_API_KEY }}
+          PCG_VECTOR_URL: ${{ secrets.PCG_VECTOR_URL }}
+          PCG_VECTOR_API_KEY: ${{ secrets.PCG_VECTOR_API_KEY }}
+        run: uv run pytest -m integration --anthropic-live

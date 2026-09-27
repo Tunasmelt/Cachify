@@ -1,5 +1,7 @@
 # Cachify
 
+![CI](https://github.com/Tunasmelt/Cachify/actions/workflows/ci.yml/badge.svg)
+
 Cachify (`pcg`) is a prompt cache gateway for diagnosing cache busts and serving safe semantic
 cache hits.
 
@@ -21,6 +23,11 @@ uv run mypy src/
 uv run pytest -q
 uv run python -c "import pcg"
 ```
+
+## Contributing
+
+Use one branch and one pull request per milestone. Pull requests into `main` are required, and CI
+must be green before merge.
 
 ## License
 
