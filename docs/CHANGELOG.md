@@ -23,3 +23,6 @@ last_verified_commit: none (pre-repo)
 - M0.2 (config loader) merged: pydantic-settings `Settings` covering every ARCHITECTURE.md env var, typed upstream config, secret masking, cached `get_settings()`.
 - Orchestration workflow tightened: Codex implements only (no git writes, no self-audit); Claude independently verifies Codex's transcript and gate results before committing, since a low-reasoning-effort run previously reported success while writing nothing. Codex reasoning effort raised to medium globally.
 - M0.3 (GitHub Actions CI): `ci.yml`, `gitleaks.yml`, `pip-audit.yml`, `integration.yml` (manual-only), PR template, CODEOWNERS, Dependabot. Actions pinned by commit SHA.
+- Fixed `gitleaks-action@v3`'s breaking change (requires `GITHUB_TOKEN` explicitly on `pull_request` events), caught by the first live CI run.
+- Branch protection enabled on `main`: PR required, `ci`/`gitleaks`/`pip-audit` required status checks, `enforce_admins`, no force-push/deletion.
+- Phase 0 complete. First Dependabot PR (action SHA bump) audited and merged.
