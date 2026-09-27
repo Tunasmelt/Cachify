@@ -6,6 +6,7 @@ cache hits.
 ## Development
 
 Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
+Configuration is read automatically from environment variables and an optional `.env` file.
 
 ```sh
 uv sync
