@@ -17,3 +17,9 @@ last_verified_commit: none (pre-repo)
 - Multi-LLM support designed: wire-format-family adapters + canonical model (ADR-011), upstream registry (ADR-012), CacheProfile and NOT_REPORTED class (ADR-013).
 - GitHub Actions CI/CD and PR-per-milestone workflow added (ADR-014): ci.yml, integration.yml (manual), dashboard.yml, release.yml; branch protection; Claude audit as PR review.
 - PRODUCT (REQ-GW-01/07/08, REQ-BD-06, A1/A2, non-goals), ARCHITECTURE, PHASES (M1.0, M2.4, M5.3/5.4), API, SECURITY updated. OpenAI-chat moved to Phase 2; Gemini native in Phase 5; Bedrock/Vertex and cross-format translation deferred.
+- GitHub repo created (Tunasmelt/Cachify), initial docs pushed to `main`.
+- M0.1 (repo skeleton) merged: uv/hatchling project, `src/pcg`, ruff/mypy/pytest config, pre-commit, `.gitattributes`, `.env.example`.
+- MIT LICENSE added; stale `docs/prompt-cache-gateway-docs.zip` removed.
+- M0.2 (config loader) merged: pydantic-settings `Settings` covering every ARCHITECTURE.md env var, typed upstream config, secret masking, cached `get_settings()`.
+- Orchestration workflow tightened: Codex implements only (no git writes, no self-audit); Claude independently verifies Codex's transcript and gate results before committing, since a low-reasoning-effort run previously reported success while writing nothing. Codex reasoning effort raised to medium globally.
+- M0.3 (GitHub Actions CI): `ci.yml`, `gitleaks.yml`, `pip-audit.yml`, `integration.yml` (manual-only), PR template, CODEOWNERS, Dependabot. Actions pinned by commit SHA.
