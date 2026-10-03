@@ -12,3 +12,5 @@ __pycache__/
 *.sqlite-shm
 *.sqlite-wal
 node_modules/
+.test-cache-local/
+.test-tmp-local/
