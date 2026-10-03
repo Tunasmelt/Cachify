@@ -1,0 +1,1 @@
+"""Shared adapter test helpers."""
