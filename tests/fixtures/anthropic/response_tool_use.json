@@ -1,0 +1,21 @@
+{
+  "id": "msg_test_0002",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "tool_test_0001",
+      "name": "lookup",
+      "input": {}
+    }
+  ],
+  "model": "claude-sonnet-4-5-test",
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 20,
+    "output_tokens": 5,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0
+  }
+}
