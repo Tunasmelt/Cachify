@@ -116,23 +116,6 @@ def test_only_allowed_client_auth_header_is_forwarded() -> None:
     assert seen[0].headers["anthropic-version"] == "2023-06-01"
 
 
-def test_streaming_request_is_not_forwarded() -> None:
-    calls = 0
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal calls
-        del request
-        calls += 1
-        return httpx.Response(200)
-
-    with client_for(handler) as client:
-        response = client.post("/v1/messages", content=request_body(stream=True))
-
-    assert response.status_code == 501
-    assert response.json() == {"error": "streaming arrives in M1.2"}
-    assert calls == 0
-
-
 @pytest.mark.parametrize(
     ("path", "headers"),
     [
