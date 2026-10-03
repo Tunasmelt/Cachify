@@ -1,0 +1,41 @@
+{
+  "model": "claude-sonnet-4-5-test",
+  "max_tokens": 128,
+  "tools": [
+    {
+      "name": "lookup",
+      "description": "Look up a synthetic record",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  ],
+  "system": [
+    {
+      "type": "text",
+      "text": "Use the supplied context.",
+      "cache_control": {
+        "type": "ephemeral"
+      }
+    },
+    {
+      "type": "text",
+      "text": "Answer briefly."
+    }
+  ],
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Find the synthetic record.",
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        }
+      ]
+    }
+  ]
+}
