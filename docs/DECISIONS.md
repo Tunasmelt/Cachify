@@ -92,3 +92,10 @@ Format: ID, date, status (Proposed | Accepted | Superseded by X), context, decis
 - Context: Providers differ: Anthropic has explicit breakpoints; OpenAI/DeepSeek/Gemini-implicit cache prefixes automatically; some (local models) report nothing.
 - Decision: Each adapter exposes a `CacheProfile` (`cache_mode`: EXPLICIT_BREAKPOINT | AUTO_PREFIX | NONE; `min_cacheable_tokens(model)`; `default_ttl_s`; `usage_reporting`: full | read_only | none; `segment_order`). Usage cache fields are nullable (unknown ≠ 0). New class `NOT_REPORTED`. The classifier selects rules by cache_mode.
 - Consequences: Detector still gives hash diffs and lineage for providers that report nothing. Schema gains `wire_format`, `upstream`, `cache_mode` on requests and nullable cache token columns.
+
+## ADR-015: Tenant hashing salt, request-record scope, Alembic-managed schema
+- Date: 2026-10-05 · Status: Accepted
+- Context: SECURITY.md requires `tenant_hash` to be a salted hash and forbids storing raw keys, but no salt setting existed. ARCHITECTURE.md specifies Alembic for migrations. M1.3 needs to persist per-request records.
+- Decision: `PCG_TENANT_HASH_SALT` (secret, at least 32 chars) keys `tenant_hash = HMAC-SHA256(salt, client_api_key)`. The raw key is never stored or logged. If the salt is unset, request records are disabled and a warning is logged; proxying is unaffected. The `requests` table is created by an Alembic revision applied at app startup; a migration failure disables recording and does not stop the gateway (REQ-GW-06). Records are written after the client response (non-stream: BackgroundTasks; stream: after the last chunk) and never change the response on failure.
+- Consequences: Rotating the salt changes every tenant_hash, so existing rows become unlinkable to their tenant; treat the salt like a long-lived secret and never rotate it casually. The `requests` table is defined both as a SQLAlchemy Table (for inserts) and in migration 0001; they must be kept in sync, and a later milestone should derive one from the other. The migration path resolves relative to the repo root, which must be revisited for the Docker image in M6.3.
+

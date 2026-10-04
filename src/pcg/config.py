@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     upstreams: Annotated[dict[str, UpstreamConfig], NoDecode] = Field(default_factory=dict)
     default_upstream: str | None = None
     admin_token: SecretStr | None = None
+    tenant_hash_salt: SecretStr | None = None
     db_url: str = "sqlite:///./pcg.db"
     vector_backend: Literal["qdrant", "pinecone", "upstash", "memory"] = "memory"
     vector_url: str | None = None
@@ -56,6 +57,13 @@ class Settings(BaseSettings):
                 return json.loads(value)
             except json.JSONDecodeError as error:
                 raise ValueError("upstreams must be a valid JSON object") from error
+        return value
+
+    @field_validator("tenant_hash_salt")
+    @classmethod
+    def validate_tenant_hash_salt(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value()) < 32:
+            raise ValueError("tenant_hash_salt must be at least 32 characters")
         return value
 
     @model_validator(mode="after")

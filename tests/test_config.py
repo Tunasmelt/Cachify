@@ -9,6 +9,7 @@ ENV_VARS = (
     "PCG_UPSTREAMS",
     "PCG_DEFAULT_UPSTREAM",
     "PCG_ADMIN_TOKEN",
+    "PCG_TENANT_HASH_SALT",
     "PCG_DB_URL",
     "PCG_VECTOR_BACKEND",
     "PCG_VECTOR_URL",
@@ -35,6 +36,7 @@ def test_defaults_load_without_environment() -> None:
     assert settings.upstreams == {}
     assert settings.default_upstream is None
     assert settings.admin_token is None
+    assert settings.tenant_hash_salt is None
     assert settings.db_url == "sqlite:///./pcg.db"
     assert settings.vector_backend == "memory"
     assert settings.vector_url is None
@@ -86,6 +88,11 @@ def test_invalid_upstreams_json_raises_validation_error(monkeypatch: pytest.Monk
 def test_external_vector_backend_requires_url() -> None:
     with pytest.raises(ValidationError, match="vector_url is required for qdrant backend"):
         Settings(_env_file=None, vector_backend="qdrant")
+
+
+def test_tenant_hash_salt_requires_32_characters() -> None:
+    with pytest.raises(ValidationError, match="tenant_hash_salt must be at least 32 characters"):
+        Settings(_env_file=None, tenant_hash_salt="too-short")
 
 
 @pytest.mark.parametrize("threshold", [-0.01, 1.01])

@@ -153,7 +153,8 @@ Access control: single-tenant deployment in v1. No Supabase/RLS (ADR-007). Admin
 | `PCG_UPSTREAMS` | Named upstreams: `{name: {wire_format, base_url, auth_style}}`, allowlisted at startup. |
 | `PCG_DEFAULT_UPSTREAM` | Upstream used by bare `/v1/messages` and `/v1/chat/completions`. |
 | `PCG_ADMIN_TOKEN` | Admin/dashboard auth. |
-| `PCG_DB_URL` | SQLite path or Postgres URL. |
+| `PCG_DB_URL` | SQLite path or Postgres URL. Schema managed by Alembic (`migrations/`), applied at startup. |
+| `PCG_TENANT_HASH_SALT` | Secret, at least 32 chars. Keys client API keys into `tenant_hash` via HMAC-SHA256. When unset, request records are disabled (ADR-015). |
 | `PCG_VECTOR_BACKEND` | `qdrant` \| `pinecone` \| `upstash` \| `memory`. |
 | `PCG_VECTOR_URL`, `PCG_VECTOR_API_KEY` | Vector backend connection. |
 | `PCG_EMBED_MODEL` | Embedding model id. |
