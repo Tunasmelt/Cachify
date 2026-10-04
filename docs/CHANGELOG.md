@@ -26,3 +26,6 @@ last_verified_commit: none (pre-repo)
 - Fixed `gitleaks-action@v3`'s breaking change (requires `GITHUB_TOKEN` explicitly on `pull_request` events), caught by the first live CI run.
 - Branch protection enabled on `main`: PR required, `ci`/`gitleaks`/`pip-audit` required status checks, `enforce_admins`, no force-push/deletion.
 - Phase 0 complete. First Dependabot PR (action SHA bump) audited and merged.
+- M1.1 (non-streaming Anthropic passthrough) merged; M1.2 (SSE streaming passthrough with stream tee) merged. Model-matcher fix for `claude-3-5-haiku-*` IDs applied during review.
+- M1.3 (per-request records): `requests` table via Alembic, background writes with HMAC tenant hashing (ADR-015), fail-open. `PCG_TENANT_HASH_SALT` added.
+
