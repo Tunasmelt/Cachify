@@ -10,14 +10,50 @@ from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from pcg.adapters.anthropic import AnthropicAdapter
-from pcg.adapters.types import Usage
+from pcg.adapters.types import CanonicalRequest, Usage
 from pcg.config import Settings, WireFormat
+from pcg.failopen import aguard, analysis_errors, guard
 from pcg.records import build_record, tenant_hash_for
 from pcg.store import RequestRecord, RequestStore
 from pcg.stream_tee import AnthropicStreamSummary, StreamTee, parse_anthropic_stream
 from pcg.upstreams import UnknownUpstreamError, resolve_upstream
 
 logger = logging.getLogger(__name__)
+failopen_logger = logging.getLogger("pcg.failopen")
+
+
+def _select_headers(headers: Mapping[str, str], names: tuple[str, ...]) -> dict[str, str]:
+    return {name: headers[name] for name in names if name in headers}
+
+
+def _feed_stream_tee(tee: StreamTee, chunk: bytes) -> bool:
+    tee.feed(chunk)
+    return True
+
+
+def _stream_summary(tee: StreamTee) -> AnthropicStreamSummary:
+    return parse_anthropic_stream(tee.raw_events_bytes())
+
+
+def _stream_state(tee: StreamTee) -> tuple[bool, bool]:
+    return tee.truncated, tee.failed
+
+
+async def _insert_record(store: RequestStore, record: RequestRecord) -> None:
+    await asyncio.to_thread(store.insert, record)
+
+
+async def _migrate_store(store: RequestStore) -> bool:
+    await asyncio.to_thread(store.migrate)
+    return True
+
+
+def _record_parse_failure(error: Exception) -> None:
+    analysis_errors.increment("parse_request")
+    try:
+        failopen_logger.warning("component=parse_request error=%s", type(error).__name__)
+    except Exception:
+        return
 
 
 def create_app(
@@ -31,10 +67,7 @@ def create_app(
     if settings.tenant_hash_salt is None:
         logger.warning("request records disabled: PCG_TENANT_HASH_SALT not set")
     else:
-        try:
-            store = RequestStore(db_url or settings.db_url)
-        except Exception as error:
-            logger.error("request store initialization failed error=%s", type(error).__name__)
+        store = guard("store_init", RequestStore, db_url or settings.db_url, default=None)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -42,19 +75,18 @@ def create_app(
         async with httpx.AsyncClient(transport=transport, timeout=60.0) as client:
             app.state.http_client = client
             if store is not None:
-                try:
-                    await asyncio.to_thread(store.migrate)
-                except Exception as error:
-                    logger.error("request store migration failed error=%s", type(error).__name__)
-                    store.dispose()
+                migrated = await aguard("store_migration", _migrate_store, store, default=False)
+                if not migrated:
+                    guard("store_dispose", store.dispose, default=None)
                     store = None
             try:
                 yield
             finally:
                 if store is not None:
-                    store.dispose()
+                    guard("store_dispose", store.dispose, default=None)
 
     app = FastAPI(lifespan=lifespan)
+    app.state.analysis_errors = analysis_errors
 
     async def proxy(
         request: Request,
@@ -81,25 +113,74 @@ def create_app(
 
         raw_body = await request.body()
         adapter = AnthropicAdapter()
+        parsed: CanonicalRequest | None
         try:
             parsed = adapter.parse_request(raw_body, request.headers)
         except ValueError:
             return JSONResponse({"error": "invalid request"}, status_code=400)
-        allowed_headers = ("content-type", "anthropic-version", *adapter.auth_header_names())
-        upstream_headers: Mapping[str, str] = {
-            name: request.headers[name] for name in allowed_headers if name in request.headers
-        }
-        upstream_url = f"{upstream.base_url.rstrip('/')}/v1/messages"
-        tenant_hash = (
-            tenant_hash_for(
-                settings.tenant_hash_salt.get_secret_value().encode(),
-                request.headers.get("x-api-key", ""),
-            )
-            if store is not None and settings.tenant_hash_salt is not None
-            else None
+        except Exception as error:
+            _record_parse_failure(error)
+            parsed = None
+
+        if parsed is None:
+            probe: object = guard("stream_probe", json.loads, raw_body, default=None)
+            is_stream = isinstance(probe, dict) and probe.get("stream") is True
+        else:
+            is_stream = parsed.stream
+
+        default_headers: tuple[str, ...] = (
+            "content-type",
+            "anthropic-version",
+            "x-api-key",
         )
-        session_id = request.headers.get("x-pcg-session")
-        cache_mode = adapter.cache_profile().cache_mode.value
+        allowed_headers: tuple[str, ...] = guard(
+            "upstream_headers",
+            lambda: ("content-type", "anthropic-version", *adapter.auth_header_names()),
+            default=default_headers,
+        )
+        upstream_headers: dict[str, str] = guard(
+            "upstream_headers",
+            _select_headers,
+            request.headers,
+            allowed_headers,
+            default={},
+        )
+        upstream_url = f"{upstream.base_url.rstrip('/')}/v1/messages"
+
+        tenant_hash: str | None = None
+        salt = settings.tenant_hash_salt
+        if store is not None and salt is not None and parsed is not None:
+            salt_bytes = guard(
+                "tenant_hash",
+                lambda: salt.get_secret_value().encode(),
+                default=None,
+            )
+            client_key = guard(
+                "tenant_hash",
+                request.headers.get,
+                "x-api-key",
+                "",
+                default=None,
+            )
+            if salt_bytes is not None and client_key is not None:
+                tenant_hash = guard(
+                    "tenant_hash",
+                    tenant_hash_for,
+                    salt_bytes,
+                    client_key,
+                    default=None,
+                )
+        session_id = guard(
+            "session_id",
+            request.headers.get,
+            "x-pcg-session",
+            default=None,
+        )
+        cache_mode = guard(
+            "cache_profile",
+            lambda: adapter.cache_profile().cache_mode.value,
+            default="unknown",
+        )
 
         def make_record(
             *,
@@ -109,7 +190,7 @@ def create_app(
             usage: Usage | None,
             latency_ms: float,
         ) -> RequestRecord:
-            if tenant_hash is None:
+            if tenant_hash is None or parsed is None:
                 raise RuntimeError("recording is disabled")
             return build_record(
                 tenant_hash=tenant_hash,
@@ -133,33 +214,43 @@ def create_app(
             latency_ms: float,
         ) -> None:
             active_store = store
-            if active_store is None or tenant_hash is None:
+            if active_store is None or tenant_hash is None or parsed is None:
                 return
-            usage = None
+            usage: Usage | None = None
             if body is not None and upstream_status is not None and 200 <= upstream_status < 300:
-                try:
-                    usage = adapter.extract_usage(json.loads(body))
-                except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
-                    pass
-            record = make_record(
+                decoded: object = guard("usage", json.loads, body, default=None)
+                if decoded is not None:
+                    usage = guard("usage", adapter.extract_usage, decoded, default=None)
+            record: RequestRecord | None = guard(
+                "record_build",
+                make_record,
                 upstream_status=upstream_status,
                 complete=None,
                 truncated=False,
                 usage=usage,
                 latency_ms=latency_ms,
+                default=None,
             )
-            try:
-                active_store.insert(record)
-            except Exception as error:
-                logger.error(
-                    "request record insert failed upstream=%s status=%s error=%s",
-                    upstream_name,
-                    upstream_status,
-                    type(error).__name__,
-                )
+            if record is not None:
+                guard("record_insert", active_store.insert, record, default=None)
+
+        def schedule_record(
+            body: bytes | None,
+            upstream_status: int | None,
+            latency_ms: float,
+        ) -> None:
+            guard(
+                "record_schedule",
+                background.add_task,
+                insert_response_record,
+                body,
+                upstream_status,
+                latency_ms,
+                default=None,
+            )
 
         started_at = perf_counter()
-        if parsed.stream:
+        if is_stream:
             stream_context = app.state.http_client.stream(
                 "POST",
                 upstream_url,
@@ -169,12 +260,7 @@ def create_app(
             try:
                 upstream_response = await stream_context.__aenter__()
             except httpx.HTTPError:
-                background.add_task(
-                    insert_response_record,
-                    None,
-                    None,
-                    (perf_counter() - started_at) * 1000,
-                )
+                schedule_record(None, None, (perf_counter() - started_at) * 1000)
                 return JSONResponse(
                     {"error": "upstream unreachable"}, status_code=502, background=background
                 )
@@ -184,8 +270,7 @@ def create_app(
                     try:
                         error_body = await upstream_response.aread()
                     except httpx.HTTPError:
-                        background.add_task(
-                            insert_response_record,
+                        schedule_record(
                             None,
                             upstream_response.status_code,
                             (perf_counter() - started_at) * 1000,
@@ -196,9 +281,15 @@ def create_app(
                             background=background,
                         )
                 finally:
-                    await stream_context.__aexit__(None, None, None)
-                background.add_task(
-                    insert_response_record,
+                    await aguard(
+                        "stream_close",
+                        stream_context.__aexit__,
+                        None,
+                        None,
+                        None,
+                        default=None,
+                    )
+                schedule_record(
                     error_body,
                     upstream_response.status_code,
                     (perf_counter() - started_at) * 1000,
@@ -213,59 +304,99 @@ def create_app(
                     background=background,
                 )
 
-            tee = StreamTee(max_buffer_bytes=stream_max_buffer_bytes)
+            tee: StreamTee | None = guard(
+                "stream_tee",
+                StreamTee,
+                stream_max_buffer_bytes,
+                default=None,
+            )
 
             async def stream_body() -> AsyncIterator[bytes]:
                 summary: AnthropicStreamSummary | None = None
-                feed_failed = False
+                feed_failed = tee is None
                 try:
                     async for chunk in upstream_response.aiter_raw():
-                        try:
-                            tee.feed(chunk)
-                        except Exception:
-                            feed_failed = True
+                        if tee is not None:
+                            feed_ok = guard(
+                                "stream_tee",
+                                _feed_stream_tee,
+                                tee,
+                                chunk,
+                                default=False,
+                            )
+                            feed_failed = feed_failed or not feed_ok
                         yield chunk
                 finally:
-                    await stream_context.__aexit__(None, None, None)
-                    try:
-                        summary = parse_anthropic_stream(tee.raw_events_bytes())
-                    except Exception:
-                        summary = None
-                    request.state.stream_summary = summary
+                    await aguard(
+                        "stream_close",
+                        stream_context.__aexit__,
+                        None,
+                        None,
+                        None,
+                        default=None,
+                    )
+                    if tee is not None:
+                        summary = guard(
+                            "stream_summary",
+                            _stream_summary,
+                            tee,
+                            default=None,
+                        )
+                        truncated, tee_failed = guard(
+                            "stream_tee",
+                            _stream_state,
+                            tee,
+                            default=(False, True),
+                        )
+                    else:
+                        truncated, tee_failed = False, True
+                    guard(
+                        "stream_summary",
+                        setattr,
+                        request.state,
+                        "stream_summary",
+                        summary,
+                        default=None,
+                    )
                     if on_stream_complete is not None:
-                        try:
-                            on_stream_complete(
-                                summary,
-                                tee.truncated,
-                                tee.failed or feed_failed,
-                            )
-                        except Exception:
-                            logger.debug("stream completion callback failed")
+                        guard(
+                            "callback",
+                            on_stream_complete,
+                            summary,
+                            truncated,
+                            tee_failed or feed_failed,
+                            default=None,
+                        )
                     active_store = store
-                    if active_store is not None and tenant_hash is not None:
-                        record = make_record(
+                    if active_store is not None and tenant_hash is not None and parsed is not None:
+                        record: RequestRecord | None = guard(
+                            "record_build",
+                            make_record,
                             upstream_status=upstream_response.status_code,
                             complete=summary.complete if summary is not None else False,
-                            truncated=tee.truncated,
+                            truncated=truncated,
                             usage=summary.usage if summary is not None else None,
                             latency_ms=(perf_counter() - started_at) * 1000,
+                            default=None,
                         )
-                        try:
-                            await asyncio.to_thread(active_store.insert, record)
-                        except Exception as error:
-                            logger.error(
-                                "request record insert failed upstream=%s status=%s error=%s",
-                                upstream_name,
-                                upstream_response.status_code,
-                                type(error).__name__,
+                        if record is not None:
+                            await aguard(
+                                "record_insert",
+                                _insert_record,
+                                active_store,
+                                record,
+                                default=None,
                             )
-                    logger.info(
+                    guard(
+                        "logging",
+                        logger.info,
                         "upstream=%s status=%d complete=%s truncated=%s duration_ms=%.3f",
                         upstream_name,
                         upstream_response.status_code,
                         summary.complete if summary is not None else False,
-                        tee.truncated,
+                        truncated,
                         (perf_counter() - started_at) * 1000,
+                        default=None,
                     )
 
             content_type = upstream_response.headers.get("content-type", "text/event-stream")
@@ -283,18 +414,12 @@ def create_app(
                 content=raw_body,
             )
         except httpx.HTTPError:
-            background.add_task(
-                insert_response_record,
-                None,
-                None,
-                (perf_counter() - started_at) * 1000,
-            )
+            schedule_record(None, None, (perf_counter() - started_at) * 1000)
             return JSONResponse(
                 {"error": "upstream unreachable"}, status_code=502, background=background
             )
 
-        background.add_task(
-            insert_response_record,
+        schedule_record(
             upstream_response.content,
             upstream_response.status_code,
             (perf_counter() - started_at) * 1000,
