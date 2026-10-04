@@ -28,4 +28,4 @@ last_verified_commit: none (pre-repo)
 - Phase 0 complete. First Dependabot PR (action SHA bump) audited and merged.
 - M1.1 (non-streaming Anthropic passthrough) merged; M1.2 (SSE streaming passthrough with stream tee) merged. Model-matcher fix for `claude-3-5-haiku-*` IDs applied during review.
 - M1.3 (per-request records): `requests` table via Alembic, background writes with HMAC tenant hashing (ADR-015), fail-open. `PCG_TENANT_HASH_SALT` added.
-
+- M1.4 (fail-open wrapper): analysis steps run behind `guard`/`aguard` (src/pcg/failopen.py) with per-component failure counts exposed on `app.state.analysis_errors`. Unexpected parse errors forward via a stream probe instead of returning 500; ValueError stays a 400. Failure logs carry component and exception class only.
