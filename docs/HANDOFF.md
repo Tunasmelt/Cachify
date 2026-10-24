@@ -2,18 +2,18 @@
 doc: HANDOFF
 status: overwritten each session
 last_verified_commit: none (pre-repo)
-updated: 2026-09-27
+updated: 2026-10-24
 ---
 
 # Handoff
 
-**Current phase:** Phase 0 (Bootstrap) complete. M0.1, M0.2, M0.3 merged. `main` is green, protected, and has a live CI/gitleaks/pip-audit trio required on every PR.
+**Current phase:** Phase 1 (Passthrough proxy) code complete: M1.0-M1.4 merged. Gate G1 offline checks pass (`reviews/phase-1-gate.md`); live Anthropic check deferred. Phase 2 not started.
 
 **Orchestration workflow:** Codex CLI (`codex exec`, medium reasoning) implements one milestone at a time on its own branch, with an explicit "implementation only" instruction — it does not run `git add`/`commit`/`push`, does not open the PR, and does not self-audit or declare a milestone done. Claude reads Codex's full transcript (not just its summary, which has previously claimed success on a no-op run), independently re-runs the gate commands, reviews the diff line by line, stages, commits, pushes, opens the PR, watches CI, and posts the audit as a PR comment. The user merges (or Claude merges once told to). Dependabot PRs get the same treatment (audited, CI checked, merged) rather than auto-merge.
 
 **Branch protection on `main`:** PR required (0 approvals needed — solo repo, GitHub won't self-approve), status checks `ci`/`gitleaks`/`pip-audit` required and must be up to date with base, `enforce_admins` on, no force-push, no deletion.
 
-**Next action:** Start Phase 1, M1.0 (canonical request model + `ProviderAdapter` contract + `CacheProfile`/`Usage` types + upstream registry stub + adapter conformance suite, per ADR-011..013).
+**Next action:** Start Phase 2, M2.1 (segmenter + dual hasher) on `phase-2/m2.1-segmenter`. In parallel, write the `--anthropic-live` integration test and set repo secrets to close G1 fully.
 
 **Blockers / pending decisions:**
 - Repo secrets for `integration.yml` (`PCG_ANTHROPIC_API_KEY`, `PCG_VECTOR_URL`, `PCG_VECTOR_API_KEY`) not yet set in GitHub; that workflow will fail if manually triggered until they are.
