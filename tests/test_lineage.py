@@ -186,6 +186,7 @@ def test_insert_with_lineage_persists_predecessor(store: RequestStore) -> None:
             connection.execute(requests.select().where(requests.c.id == "second")).mappings().one()
         )
     assert (row["predecessor_id"], row["lineage_source"]) == ("first", "inferred")
+    assert (row["divergence_index"], row["divergence_kind"]) == (2, "append")
 
 
 def test_lineage_failure_never_blocks_insert(

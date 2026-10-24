@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 
+from pcg.diff import Divergence, resolve_divergence
 from pcg.failopen import guard
 from pcg.store import RequestRecord, RequestStore, SegmentRow
 
@@ -94,6 +95,20 @@ def insert_with_lineage(
             predecessor_id=predecessor.request_id,
             lineage_source=predecessor.source,
         )
+        divergence: Divergence | None = guard(
+            "diff",
+            resolve_divergence,
+            store,
+            predecessor.request_id,
+            segment_rows,
+            default=None,
+        )
+        if divergence is not None:
+            record = replace(
+                record,
+                divergence_index=divergence.index,
+                divergence_kind=divergence.kind.value,
+            )
     store.insert(record, segment_rows)
 
 
