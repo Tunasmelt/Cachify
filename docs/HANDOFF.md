@@ -7,13 +7,13 @@ updated: 2026-10-24
 
 # Handoff
 
-**Current phase:** Phase 2 in progress. M2.1 (segmenter + dual hasher) implemented on `phase-2/m2.1-segmenter`, PR open for audit. Phase 1 gate G1 is a conditional pass (live Anthropic check deferred).
+**Current phase:** Phase 2 in progress. M2.1 merged. M2.2 (lineage) implemented on `phase-2/m2.2-lineage`, PR open for audit. Phase 1 gate G1 is a conditional pass (live Anthropic check deferred).
 
 **Orchestration workflow:** Codex CLI (`codex exec`, medium reasoning) implements one milestone at a time on its own branch, with an explicit "implementation only" instruction — it does not run `git add`/`commit`/`push`, does not open the PR, and does not self-audit or declare a milestone done. Claude reads Codex's full transcript (not just its summary, which has previously claimed success on a no-op run), independently re-runs the gate commands, reviews the diff line by line, stages, commits, pushes, opens the PR, watches CI, and posts the audit as a PR comment. The user merges (or Claude merges once told to). Dependabot PRs get the same treatment (audited, CI checked, merged) rather than auto-merge.
 
 **Branch protection on `main`:** PR required (0 approvals needed — solo repo, GitHub won't self-approve), status checks `ci`/`gitleaks`/`pip-audit` required and must be up to date with base, `enforce_admins` on, no force-push, no deletion.
 
-**Next action:** Audit and merge the M2.1 PR, then M2.2 (lineage via session header, then prefix inference). Still open: write the `--anthropic-live` integration test and set repo secrets to close G1 fully.
+**Next action:** Audit and merge the M2.2 PR, then M2.3 (first-divergence diff engine). Still open: write the `--anthropic-live` integration test and set repo secrets to close G1 fully.
 
 **Blockers / pending decisions:**
 - Repo secrets for `integration.yml` (`PCG_ANTHROPIC_API_KEY`, `PCG_VECTOR_URL`, `PCG_VECTOR_API_KEY`) not yet set in GitHub; that workflow will fail if manually triggered until they are.

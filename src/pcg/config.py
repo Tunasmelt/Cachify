@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     provider_cache_ttl_s: int = Field(default=300, gt=0)
     log_mode: Literal["off", "hash", "full"] = "hash"
     body_retention_h: int = Field(default=24, gt=0)
+    lineage_window_requests: int = Field(default=50, gt=0)
+    lineage_window_s: int = Field(default=3600, gt=0)
 
     @field_validator("upstreams", mode="before")
     @classmethod

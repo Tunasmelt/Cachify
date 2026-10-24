@@ -13,6 +13,7 @@ from pcg.adapters.anthropic import AnthropicAdapter
 from pcg.adapters.types import CanonicalRequest, Usage
 from pcg.config import Settings, WireFormat
 from pcg.failopen import aguard, analysis_errors, guard
+from pcg.lineage import insert_with_lineage
 from pcg.records import build_record, build_segment_rows, tenant_hash_for
 from pcg.store import RequestRecord, RequestStore, SegmentRow
 from pcg.stream_tee import AnthropicStreamSummary, StreamTee, parse_anthropic_stream
@@ -45,9 +46,18 @@ _NO_ROWS: tuple[SegmentRow, ...] = ()
 async def _insert_record(
     store: RequestStore,
     record: RequestRecord,
-    segment_rows: Sequence[SegmentRow] = (),
+    segment_rows: Sequence[SegmentRow],
+    window_requests: int,
+    window_s: int,
 ) -> None:
-    await asyncio.to_thread(store.insert, record, segment_rows)
+    await asyncio.to_thread(
+        insert_with_lineage,
+        store,
+        record,
+        segment_rows,
+        window_requests=window_requests,
+        window_s=window_s,
+    )
 
 
 async def _migrate_store(store: RequestStore) -> bool:
@@ -242,7 +252,16 @@ def create_app(
                 rows = guard(
                     "segment_hash", build_segment_rows, record.id, parsed, default=_NO_ROWS
                 )
-                guard("record_insert", active_store.insert, record, rows, default=None)
+                guard(
+                    "record_insert",
+                    insert_with_lineage,
+                    active_store,
+                    record,
+                    rows,
+                    window_requests=settings.lineage_window_requests,
+                    window_s=settings.lineage_window_s,
+                    default=None,
+                )
 
         def schedule_record(
             body: bytes | None,
@@ -403,6 +422,8 @@ def create_app(
                                 active_store,
                                 record,
                                 rows,
+                                settings.lineage_window_requests,
+                                settings.lineage_window_s,
                                 default=None,
                             )
                     guard(
