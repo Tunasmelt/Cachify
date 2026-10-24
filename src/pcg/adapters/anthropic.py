@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from pcg.adapters import types as t
 from pcg.adapters.base import ProviderAdapter
 from pcg.config import WireFormat
+from pcg.segmenter import array_element_spans, decode_body, slice_bytes, top_level_spans
 
 _MODEL_MINIMUMS = (
     (("fable", "5", "1"), 512),
@@ -42,17 +43,6 @@ def min_cacheable_tokens(model: str) -> int:
 
     # Unknown models use the largest known minimum to avoid reporting cacheability too early.
     return 4096
-
-
-def _serialized(value: object) -> bytes:
-    # Known limitation: this is re-serialized, not byte-exact as sent. ADR-006 requires
-    # byte-exact capture; that lands in Phase 2 (M2.1).
-    return json.dumps(
-        value,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        sort_keys=False,
-    ).encode("utf-8")
 
 
 def _has_cache_control(value: object, *, inspect_content: bool = False) -> bool:
@@ -103,18 +93,32 @@ class AnthropicAdapter(ProviderAdapter):
         if not isinstance(stream, bool):
             raise ValueError("stream must be a boolean")
 
-        parts: list[tuple[t.SegmentKind, str | None, object, bool]] = []
+        text = decode_body(raw_body)
+        try:
+            spans = top_level_spans(text)
+        except (ValueError, json.JSONDecodeError) as error:
+            raise ValueError("request body must be a JSON object") from error
+
+        # (kind, role, parsed value for inspection, exact bytes as sent)
+        parts: list[tuple[t.SegmentKind, str | None, object, bytes]] = []
         tools = data.get("tools", [])
         if not isinstance(tools, list):
             raise ValueError("tools must be a list")
-        parts.extend((t.SegmentKind.TOOL, None, tool, _has_cache_control(tool)) for tool in tools)
+        if tools:
+            tool_spans = array_element_spans(text, spans["tools"])
+            parts.extend(
+                (t.SegmentKind.TOOL, None, tool, slice_bytes(text, span))
+                for tool, span in zip(tools, tool_spans, strict=True)
+            )
 
         system = data.get("system")
         if isinstance(system, str):
-            parts.append((t.SegmentKind.SYSTEM, None, system, False))
+            parts.append((t.SegmentKind.SYSTEM, None, system, slice_bytes(text, spans["system"])))
         elif isinstance(system, list):
+            system_spans = array_element_spans(text, spans["system"])
             parts.extend(
-                (t.SegmentKind.SYSTEM, None, block, _has_cache_control(block)) for block in system
+                (t.SegmentKind.SYSTEM, None, block, slice_bytes(text, span))
+                for block, span in zip(system, system_spans, strict=True)
             )
         elif system is not None:
             raise ValueError("system must be a string or a list")
@@ -122,24 +126,24 @@ class AnthropicAdapter(ProviderAdapter):
         messages = data.get("messages", [])
         if not isinstance(messages, list):
             raise ValueError("messages must be a list")
-        for message in messages:
+        message_spans = array_element_spans(text, spans["messages"]) if messages else []
+        for message, span in zip(messages, message_spans, strict=True):
             if not isinstance(message, dict):
                 raise ValueError("each message must be an object")
             role = message.get("role")
             if not isinstance(role, str):
                 raise ValueError("message role must be a string")
-            parts.append(
-                (
-                    t.SegmentKind.MESSAGE,
-                    role,
-                    message,
-                    _has_cache_control(message, inspect_content=True),
-                )
-            )
+            parts.append((t.SegmentKind.MESSAGE, role, message, slice_bytes(text, span)))
 
         segments = tuple(
-            t.Segment(kind, index, role, _serialized(value), has_breakpoint)
-            for index, (kind, role, value, has_breakpoint) in enumerate(parts)
+            t.Segment(
+                kind,
+                index,
+                role,
+                raw,
+                _has_cache_control(value, inspect_content=kind is t.SegmentKind.MESSAGE),
+            )
+            for index, (kind, role, value, raw) in enumerate(parts)
         )
         excluded = {"model", "stream", "tools", "system", "messages"}
         params = {key: value for key, value in data.items() if key not in excluded}

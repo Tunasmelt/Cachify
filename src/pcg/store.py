@@ -1,12 +1,15 @@
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Float,
     Index,
     Integer,
     MetaData,
+    PrimaryKeyConstraint,
     Table,
     Text,
     create_engine,
@@ -39,6 +42,19 @@ requests = Table(
     Column("log_mode", Text, nullable=False),
     Index("ix_requests_tenant_hash_created_at", "tenant_hash", "created_at"),
 )
+segments = Table(
+    "segments",
+    metadata,
+    Column("request_id", Text, nullable=False),
+    Column("idx", Integer, nullable=False),
+    Column("kind", Text, nullable=False),
+    Column("role", Text, nullable=True),
+    Column("raw_hash", Text, nullable=False),
+    Column("canon_hash", Text, nullable=False),
+    Column("byte_len", Integer, nullable=False),
+    Column("has_breakpoint", Boolean, nullable=False),
+    PrimaryKeyConstraint("request_id", "idx"),
+)
 
 
 @dataclass(frozen=True)
@@ -63,6 +79,18 @@ class RequestRecord:
     log_mode: str
 
 
+@dataclass(frozen=True)
+class SegmentRow:
+    request_id: str
+    idx: int
+    kind: str
+    role: str | None
+    raw_hash: str
+    canon_hash: str
+    byte_len: int
+    has_breakpoint: bool
+
+
 class RequestStore:
     def __init__(self, db_url: str) -> None:
         connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
@@ -79,9 +107,11 @@ class RequestStore:
         config.set_main_option("sqlalchemy.url", self.db_url.replace("%", "%%"))
         command.upgrade(config, "head")
 
-    def insert(self, record: RequestRecord) -> None:
+    def insert(self, record: RequestRecord, segment_rows: Sequence[SegmentRow] = ()) -> None:
         with self.engine.begin() as connection:
             connection.execute(requests.insert().values(**asdict(record)))
+            if segment_rows:
+                connection.execute(segments.insert(), [asdict(row) for row in segment_rows])
 
     def count(self) -> int:
         with self.engine.connect() as connection:
@@ -91,4 +121,4 @@ class RequestStore:
         self.engine.dispose()
 
 
-__all__ = ["RequestRecord", "RequestStore", "metadata", "requests"]
+__all__ = ["RequestRecord", "RequestStore", "SegmentRow", "metadata", "requests", "segments"]
