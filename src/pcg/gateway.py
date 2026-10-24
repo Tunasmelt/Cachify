@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator, Callable, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from time import perf_counter
 
@@ -13,8 +13,8 @@ from pcg.adapters.anthropic import AnthropicAdapter
 from pcg.adapters.types import CanonicalRequest, Usage
 from pcg.config import Settings, WireFormat
 from pcg.failopen import aguard, analysis_errors, guard
-from pcg.records import build_record, tenant_hash_for
-from pcg.store import RequestRecord, RequestStore
+from pcg.records import build_record, build_segment_rows, tenant_hash_for
+from pcg.store import RequestRecord, RequestStore, SegmentRow
 from pcg.stream_tee import AnthropicStreamSummary, StreamTee, parse_anthropic_stream
 from pcg.upstreams import UnknownUpstreamError, resolve_upstream
 
@@ -39,8 +39,15 @@ def _stream_state(tee: StreamTee) -> tuple[bool, bool]:
     return tee.truncated, tee.failed
 
 
-async def _insert_record(store: RequestStore, record: RequestRecord) -> None:
-    await asyncio.to_thread(store.insert, record)
+_NO_ROWS: tuple[SegmentRow, ...] = ()
+
+
+async def _insert_record(
+    store: RequestStore,
+    record: RequestRecord,
+    segment_rows: Sequence[SegmentRow] = (),
+) -> None:
+    await asyncio.to_thread(store.insert, record, segment_rows)
 
 
 async def _migrate_store(store: RequestStore) -> bool:
@@ -232,7 +239,10 @@ def create_app(
                 default=None,
             )
             if record is not None:
-                guard("record_insert", active_store.insert, record, default=None)
+                rows = guard(
+                    "segment_hash", build_segment_rows, record.id, parsed, default=_NO_ROWS
+                )
+                guard("record_insert", active_store.insert, record, rows, default=None)
 
         def schedule_record(
             body: bytes | None,
@@ -380,11 +390,19 @@ def create_app(
                             default=None,
                         )
                         if record is not None:
+                            rows = guard(
+                                "segment_hash",
+                                build_segment_rows,
+                                record.id,
+                                parsed,
+                                default=_NO_ROWS,
+                            )
                             await aguard(
                                 "record_insert",
                                 _insert_record,
                                 active_store,
                                 record,
+                                rows,
                                 default=None,
                             )
                     guard(

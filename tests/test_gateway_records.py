@@ -32,6 +32,26 @@ def make_settings(*, salt: str | None = SALT) -> Settings:
     )
 
 
+def segment_count(path: Path, request_id: str) -> int:
+    from sqlalchemy import func
+
+    from pcg.store import segments
+
+    engine = create_engine(sqlite_url(path))
+    try:
+        with engine.connect() as connection:
+            return int(
+                connection.scalar(
+                    select(func.count())
+                    .select_from(segments)
+                    .where(segments.c.request_id == request_id)
+                )
+                or 0
+            )
+    finally:
+        engine.dispose()
+
+
 def request_body(*, stream: bool = False) -> bytes:
     stream_value = b"true" if stream else b"false"
     return (
@@ -144,6 +164,7 @@ def test_stream_record_has_usage_and_completion(
     assert row["output_tokens"] == (7 if complete else 4)
     assert row["cache_write_tokens"] == (11 if complete else 5)
     assert row["cache_read_tokens"] == (23 if complete else 9)
+    assert segment_count(db_path, str(row["id"])) == 1
 
 
 def test_streaming_upstream_error_is_recorded(tmp_path: Path) -> None:
@@ -245,3 +266,52 @@ def test_migration_failure_does_not_stop_proxy(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert directory_path.is_dir()
+
+
+def test_segment_hashes_are_recorded_without_content_or_key(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    from pcg.hashing import hash_segment
+    from pcg.store import segments
+
+    db_path = tmp_path / "pcg.db"
+    sentinel = "test-client-key-sentinel"
+    body = (
+        b'{"model":"claude-sonnet-4-5-test","max_tokens":8,"system":"SECRET-PROMPT-TEXT",'
+        b'"messages":[{ "role":"user" , "content":"hi"}]}'
+    )
+    reply = (Path(__file__).parent / "fixtures" / "anthropic" / "response_plain.json").read_bytes()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, content=reply, headers={"content-type": "application/json"})
+
+    caplog.set_level(logging.DEBUG)
+    app = create_app(
+        make_settings(), transport=httpx.MockTransport(handler), db_url=sqlite_url(db_path)
+    )
+    with TestClient(app) as client:
+        client.post("/v1/messages", content=body, headers={"x-api-key": sentinel})
+
+    engine = create_engine(sqlite_url(db_path))
+    try:
+        with engine.connect() as connection:
+            rows = [
+                dict(r)
+                for r in connection.execute(select(segments).order_by(segments.c.idx)).mappings()
+            ]
+    finally:
+        engine.dispose()
+
+    request_id = rows_at(db_path)[0]["id"]
+    assert [(r["idx"], r["kind"], r["role"]) for r in rows] == [
+        (0, "system", None),
+        (1, "message", "user"),
+    ]
+    assert all(r["request_id"] == request_id for r in rows)
+    assert rows[1]["raw_hash"] == hash_segment(b'{ "role":"user" , "content":"hi"}').raw_hash
+    assert rows[1]["raw_hash"] != rows[1]["canon_hash"]
+    raw_db = db_path.read_bytes()
+    assert b"SECRET-PROMPT-TEXT" not in raw_db
+    assert sentinel.encode() not in raw_db
+    assert all("SECRET-PROMPT-TEXT" not in r.getMessage() for r in caplog.records)

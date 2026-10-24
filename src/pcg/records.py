@@ -3,8 +3,9 @@ import hmac
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from pcg.adapters.types import Usage
-from pcg.store import RequestRecord
+from pcg.adapters.types import CanonicalRequest, Usage
+from pcg.hashing import hash_segments
+from pcg.store import RequestRecord, SegmentRow
 
 
 def tenant_hash_for(salt: bytes, client_key: str) -> str:
@@ -50,4 +51,22 @@ def build_record(
     )
 
 
-__all__ = ["build_record", "tenant_hash_for"]
+def build_segment_rows(request_id: str, request: CanonicalRequest) -> tuple[SegmentRow, ...]:
+    """Hash every segment. Only hashes and metadata are stored, never segment content."""
+    hashes = hash_segments(request)
+    return tuple(
+        SegmentRow(
+            request_id=request_id,
+            idx=segment.idx,
+            kind=segment.kind.value,
+            role=segment.role,
+            raw_hash=digest.raw_hash,
+            canon_hash=digest.canon_hash,
+            byte_len=digest.byte_len,
+            has_breakpoint=segment.has_breakpoint,
+        )
+        for segment, digest in zip(request.segments, hashes, strict=True)
+    )
+
+
+__all__ = ["build_record", "build_segment_rows", "tenant_hash_for"]

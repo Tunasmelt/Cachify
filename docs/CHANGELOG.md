@@ -32,3 +32,4 @@ last_verified_commit: none (pre-repo)
 
 ## 2026-10-24
 - Gate G1 reviewed: standard gates and `pytest -m proxy` pass on `f2db082`; `reviews/phase-1-gate.md` added. Live Anthropic check deferred (no integration test or repo secrets yet). HANDOFF updated; Phase 2 next.
+- M2.1 (segmenter + dual hasher): segments are now sliced byte-exact from the request body (`pcg/segmenter.py`), replacing the M1.0 re-serialization. `raw_hash` (exact bytes) and `canon_hash` (sorted compact JSON) computed in `pcg/hashing.py`; `segments` table added (migration 0002) and written with the request row, hashes only, fail-open. Non-UTF-8 request bodies are now rejected with 400.
