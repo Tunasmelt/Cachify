@@ -295,6 +295,9 @@ def test_second_request_links_to_first_via_prefix_then_session(tmp_path: Path) -
         client.post("/v1/messages", content=second, headers={**headers, "x-pcg-session": "sess"})
 
     rows = sorted(rows_at(db_path), key=lambda r: str(r["created_at"]))
+    assert (rows[0]["divergence_index"], rows[0]["divergence_kind"]) == (None, None)
+    assert (rows[1]["divergence_index"], rows[1]["divergence_kind"]) == (2, "append")
+    assert (rows[3]["divergence_index"], rows[3]["divergence_kind"]) == (2, "append")
     assert rows[0]["predecessor_id"] is None
     assert (rows[1]["predecessor_id"], rows[1]["lineage_source"]) == (rows[0]["id"], "inferred")
     assert rows[2]["lineage_source"] is None

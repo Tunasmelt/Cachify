@@ -42,6 +42,8 @@ requests = Table(
     Column("log_mode", Text, nullable=False),
     Column("predecessor_id", Text, nullable=True),
     Column("lineage_source", Text, nullable=True),
+    Column("divergence_index", Integer, nullable=True),
+    Column("divergence_kind", Text, nullable=True),
     Index("ix_requests_tenant_hash_created_at", "tenant_hash", "created_at"),
     Index("ix_requests_tenant_hash_session_id", "tenant_hash", "session_id", "created_at"),
 )
@@ -82,6 +84,8 @@ class RequestRecord:
     log_mode: str
     predecessor_id: str | None = None
     lineage_source: str | None = None
+    divergence_index: int | None = None
+    divergence_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -155,6 +159,16 @@ class RequestStore:
             for request_id, raw_hash in rows:
                 by_request.setdefault(request_id, []).append(raw_hash)
         return [(request_id, by_request.get(request_id, [])) for request_id in ids]
+
+    def segment_hashes(self, request_id: str) -> list[tuple[str, str]]:
+        """Ordered (raw_hash, canon_hash) pairs for one request."""
+        query = (
+            select(segments.c.raw_hash, segments.c.canon_hash)
+            .where(segments.c.request_id == request_id)
+            .order_by(segments.c.idx)
+        )
+        with self.engine.connect() as connection:
+            return [(raw, canon) for raw, canon in connection.execute(query)]
 
     def count(self) -> int:
         with self.engine.connect() as connection:

@@ -106,3 +106,15 @@ def test_insert_writes_request_and_segment_rows_atomically(tmp_path: Path) -> No
             assert store.count() == 1
     finally:
         store.dispose()
+
+
+def test_migrate_does_not_disable_application_loggers(tmp_path: Path) -> None:
+    import logging
+
+    logger = logging.getLogger("pcg.failopen")
+    store = RequestStore(sqlite_url(tmp_path / "pcg.db"))
+    try:
+        store.migrate()
+        assert logger.disabled is False
+    finally:
+        store.dispose()
