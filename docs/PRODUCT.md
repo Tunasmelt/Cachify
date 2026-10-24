@@ -97,6 +97,6 @@ Two components behind one proxy:
 ## Open questions
 - OQ-1: RESOLVED: Qdrant (ADR-010), hosted on Qdrant Cloud.
 - OQ-2: Embedding model: local (e.g. a small sentence-transformers / fastembed model) vs. API embeddings. Local keeps it free and fast; dimension must fit the chosen store's free-tier limit.
-- OQ-3: Lineage inference window: how many recent requests to compare, and over what time window.
+- OQ-3: Lineage inference window: how many recent requests to compare, and over what time window. Resolved in M2.2: 50 requests / 3600 s, configurable.
 - OQ-4: Should semantic cache consider more than the final user turn for multi-turn conversations (e.g. last N turns hashed into the fingerprint)?
 - OQ-5: Final project name.

@@ -268,6 +268,39 @@ def test_migration_failure_does_not_stop_proxy(tmp_path: Path) -> None:
     assert directory_path.is_dir()
 
 
+def test_second_request_links_to_first_via_prefix_then_session(tmp_path: Path) -> None:
+    db_path = tmp_path / "pcg.db"
+    reply = (Path(__file__).parent / "fixtures" / "anthropic" / "response_plain.json").read_bytes()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, content=reply, headers={"content-type": "application/json"})
+
+    first = (
+        b'{"model":"claude-sonnet-4-5-test","max_tokens":8,"system":"S",'
+        b'"messages":[{"role":"user","content":"one"}]}'
+    )
+    second = first.replace(
+        b'"content":"one"}]',
+        b'"content":"one"},{"role":"assistant","content":"two"},{"role":"user","content":"x"}]',
+    )
+    app = create_app(
+        make_settings(), transport=httpx.MockTransport(handler), db_url=sqlite_url(db_path)
+    )
+    with TestClient(app) as client:
+        headers = {"x-api-key": "k"}
+        client.post("/v1/messages", content=first, headers=headers)
+        client.post("/v1/messages", content=second, headers=headers)
+        client.post("/v1/messages", content=first, headers={**headers, "x-pcg-session": "sess"})
+        client.post("/v1/messages", content=second, headers={**headers, "x-pcg-session": "sess"})
+
+    rows = sorted(rows_at(db_path), key=lambda r: str(r["created_at"]))
+    assert rows[0]["predecessor_id"] is None
+    assert (rows[1]["predecessor_id"], rows[1]["lineage_source"]) == (rows[0]["id"], "inferred")
+    assert rows[2]["lineage_source"] is None
+    assert (rows[3]["predecessor_id"], rows[3]["lineage_source"]) == (rows[2]["id"], "session")
+
+
 def test_segment_hashes_are_recorded_without_content_or_key(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:

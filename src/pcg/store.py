@@ -40,7 +40,10 @@ requests = Table(
     Column("cache_read_tokens", Integer, nullable=True),
     Column("latency_ms", Float, nullable=False),
     Column("log_mode", Text, nullable=False),
+    Column("predecessor_id", Text, nullable=True),
+    Column("lineage_source", Text, nullable=True),
     Index("ix_requests_tenant_hash_created_at", "tenant_hash", "created_at"),
+    Index("ix_requests_tenant_hash_session_id", "tenant_hash", "session_id", "created_at"),
 )
 segments = Table(
     "segments",
@@ -77,6 +80,8 @@ class RequestRecord:
     cache_read_tokens: int | None
     latency_ms: float
     log_mode: str
+    predecessor_id: str | None = None
+    lineage_source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -112,6 +117,44 @@ class RequestStore:
             connection.execute(requests.insert().values(**asdict(record)))
             if segment_rows:
                 connection.execute(segments.insert(), [asdict(row) for row in segment_rows])
+
+    def latest_in_session(self, tenant_hash: str, session_id: str) -> str | None:
+        query = (
+            select(requests.c.id)
+            .where(requests.c.tenant_hash == tenant_hash, requests.c.session_id == session_id)
+            .order_by(requests.c.created_at.desc())
+            .limit(1)
+        )
+        with self.engine.connect() as connection:
+            return connection.scalar(query)
+
+    def recent_segment_hashes(
+        self, tenant_hash: str, model: str, since: str, limit: int
+    ) -> list[tuple[str, list[str]]]:
+        """Newest-first (request id, ordered raw hashes) of recent same-tenant, same-model rows."""
+        recent = (
+            select(requests.c.id)
+            .where(
+                requests.c.tenant_hash == tenant_hash,
+                requests.c.model == model,
+                requests.c.created_at >= since,
+            )
+            .order_by(requests.c.created_at.desc())
+            .limit(limit)
+        )
+        with self.engine.connect() as connection:
+            ids: list[str] = list(connection.scalars(recent))
+            if not ids:
+                return []
+            rows = connection.execute(
+                select(segments.c.request_id, segments.c.raw_hash)
+                .where(segments.c.request_id.in_(ids))
+                .order_by(segments.c.request_id, segments.c.idx)
+            )
+            by_request: dict[str, list[str]] = {}
+            for request_id, raw_hash in rows:
+                by_request.setdefault(request_id, []).append(raw_hash)
+        return [(request_id, by_request.get(request_id, [])) for request_id in ids]
 
     def count(self) -> int:
         with self.engine.connect() as connection:

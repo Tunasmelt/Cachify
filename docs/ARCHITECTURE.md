@@ -163,6 +163,7 @@ Access control: single-tenant deployment in v1. No Supabase/RLS (ADR-007). Admin
 | `PCG_PROVIDER_CACHE_TTL_S` | Assumed provider cache TTL for classification (default 300). |
 | `PCG_LOG_MODE` | `off` \| `hash` \| `full`. |
 | `PCG_BODY_RETENTION_H` | Body retention window. |
+| `PCG_LINEAGE_WINDOW_REQUESTS`, `PCG_LINEAGE_WINDOW_S` | Prefix-inference window: compare against at most this many recent same-tenant, same-model requests (default 50) no older than this many seconds (default 3600). |
 
 ## Deployment
 - Dev: `uvicorn` locally, SQLite, Qdrant local mode (in-process, no Docker) or `memory` backend.
