@@ -142,12 +142,12 @@ def test_conflicting_upstream_selection_is_rejected() -> None:
     assert response.status_code == 400
 
 
-def test_unimplemented_wire_format_is_rejected() -> None:
+def test_upstream_wire_format_must_match_endpoint() -> None:
     with client_for(lambda request: httpx.Response(200)) as client:
         response = client.post("/u/chat/v1/messages", content=request_body())
 
-    assert response.status_code == 501
-    assert response.json() == {"error": "wire format not implemented yet"}
+    assert response.status_code == 400
+    assert response.json() == {"error": "upstream wire format does not match endpoint"}
 
 
 def test_transport_error_returns_bad_gateway() -> None:
