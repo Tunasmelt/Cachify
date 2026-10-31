@@ -1,0 +1,1 @@
+{"model": "gpt-test", "messages": [{"role": "system", "content": "You are helpful."}, {"role": "user", "content": "Hello"}]}

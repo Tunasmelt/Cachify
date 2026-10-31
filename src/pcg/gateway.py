@@ -9,15 +9,15 @@ import httpx
 from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-from pcg.adapters.anthropic import AnthropicAdapter
 from pcg.adapters.types import CanonicalRequest, Usage
 from pcg.config import Settings, WireFormat
 from pcg.failopen import aguard, analysis_errors, guard
 from pcg.lineage import insert_with_lineage
 from pcg.records import build_record, build_segment_rows, tenant_hash_for
 from pcg.store import RequestRecord, RequestStore, SegmentRow
-from pcg.stream_tee import AnthropicStreamSummary, StreamTee, parse_anthropic_stream
+from pcg.stream_tee import StreamSummary, StreamTee
 from pcg.upstreams import UnknownUpstreamError, resolve_upstream
+from pcg.wire import wire_support
 
 logger = logging.getLogger(__name__)
 failopen_logger = logging.getLogger("pcg.failopen")
@@ -32,8 +32,10 @@ def _feed_stream_tee(tee: StreamTee, chunk: bytes) -> bool:
     return True
 
 
-def _stream_summary(tee: StreamTee) -> AnthropicStreamSummary:
-    return parse_anthropic_stream(tee.raw_events_bytes())
+def _stream_summary(
+    tee: StreamTee, parse_stream: Callable[[bytes], StreamSummary]
+) -> StreamSummary:
+    return parse_stream(tee.raw_events_bytes())
 
 
 def _stream_state(tee: StreamTee) -> tuple[bool, bool]:
@@ -76,7 +78,7 @@ def _record_parse_failure(error: Exception) -> None:
 def create_app(
     settings: Settings,
     transport: httpx.AsyncBaseTransport | None = None,
-    on_stream_complete: Callable[[AnthropicStreamSummary | None, bool, bool], None] | None = None,
+    on_stream_complete: Callable[[StreamSummary | None, bool, bool], None] | None = None,
     stream_max_buffer_bytes: int = 1_048_576,
     db_url: str | None = None,
 ) -> FastAPI:
@@ -109,6 +111,7 @@ def create_app(
         request: Request,
         path_upstream: str | None,
         background: BackgroundTasks,
+        endpoint_wire: WireFormat,
     ) -> Response:
         header_upstream = request.headers.get("x-pcg-upstream")
         if path_upstream is not None and header_upstream is not None:
@@ -125,11 +128,14 @@ def create_app(
         except UnknownUpstreamError:
             return JSONResponse({"error": "unknown upstream"}, status_code=404)
 
-        if upstream.wire_format is not WireFormat.ANTHROPIC_MESSAGES:
-            return JSONResponse({"error": "wire format not implemented yet"}, status_code=501)
+        support = wire_support(endpoint_wire)
+        if support is None or upstream.wire_format is not endpoint_wire:
+            return JSONResponse(
+                {"error": "upstream wire format does not match endpoint"}, status_code=400
+            )
 
         raw_body = await request.body()
-        adapter = AnthropicAdapter()
+        adapter = support.adapter
         parsed: CanonicalRequest | None
         try:
             parsed = adapter.parse_request(raw_body, request.headers)
@@ -145,15 +151,10 @@ def create_app(
         else:
             is_stream = parsed.stream
 
-        default_headers: tuple[str, ...] = (
-            "content-type",
-            "anthropic-version",
-            "x-api-key",
-        )
         allowed_headers: tuple[str, ...] = guard(
             "upstream_headers",
-            lambda: ("content-type", "anthropic-version", *adapter.auth_header_names()),
-            default=default_headers,
+            lambda: (*support.extra_headers, *adapter.auth_header_names()),
+            default=support.extra_headers,
         )
         upstream_headers: dict[str, str] = guard(
             "upstream_headers",
@@ -162,7 +163,7 @@ def create_app(
             allowed_headers,
             default={},
         )
-        upstream_url = f"{upstream.base_url.rstrip('/')}/v1/messages"
+        upstream_url = f"{upstream.base_url.rstrip('/')}{support.upstream_path}"
 
         tenant_hash: str | None = None
         salt = settings.tenant_hash_salt
@@ -174,9 +175,8 @@ def create_app(
             )
             client_key = guard(
                 "tenant_hash",
-                request.headers.get,
-                "x-api-key",
-                "",
+                support.client_key,
+                request.headers,
                 default=None,
             )
             if salt_bytes is not None and client_key is not None:
@@ -341,7 +341,7 @@ def create_app(
             )
 
             async def stream_body() -> AsyncIterator[bytes]:
-                summary: AnthropicStreamSummary | None = None
+                summary: StreamSummary | None = None
                 feed_failed = tee is None
                 try:
                     async for chunk in upstream_response.aiter_raw():
@@ -369,6 +369,7 @@ def create_app(
                             "stream_summary",
                             _stream_summary,
                             tee,
+                            support.parse_stream,
                             default=None,
                         )
                         truncated, tee_failed = guard(
@@ -475,12 +476,20 @@ def create_app(
 
     @app.post("/v1/messages")
     async def default_messages(request: Request, background: BackgroundTasks) -> Response:
-        return await proxy(request, None, background)
+        return await proxy(request, None, background, WireFormat.ANTHROPIC_MESSAGES)
 
     @app.post("/u/{upstream}/v1/messages")
     async def named_messages(
         upstream: str, request: Request, background: BackgroundTasks
     ) -> Response:
-        return await proxy(request, upstream, background)
+        return await proxy(request, upstream, background, WireFormat.ANTHROPIC_MESSAGES)
+
+    @app.post("/v1/chat/completions")
+    async def default_chat(request: Request, background: BackgroundTasks) -> Response:
+        return await proxy(request, None, background, WireFormat.OPENAI_CHAT)
+
+    @app.post("/u/{upstream}/v1/chat/completions")
+    async def named_chat(upstream: str, request: Request, background: BackgroundTasks) -> Response:
+        return await proxy(request, upstream, background, WireFormat.OPENAI_CHAT)
 
     return app

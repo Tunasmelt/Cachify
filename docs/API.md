@@ -14,7 +14,7 @@ Generated from OpenAPI (`/openapi.json`) once Phase 5 lands. Until then, planned
 | Method | Path | Auth | Notes |
 |---|---|---|---|
 | POST | `/v1/messages` | Provider key (forwarded) | anthropic-messages, streaming supported. |
-| POST | `/v1/chat/completions` | Provider key (forwarded) | openai-chat (Phase 2). |
+| POST | `/v1/chat/completions` | Provider key (forwarded) | openai-chat. Upstream must have `wire_format: openai-chat`; a mismatch with the endpoint returns 400. |
 | POST | `/v1/responses` | Provider key (forwarded) | openai-responses (Phase 5). |
 | POST | `/v1beta/models/{model}:generateContent`, `:streamGenerateContent` | Provider key (forwarded) | gemini (Phase 5). |
 
@@ -47,7 +47,7 @@ Response headers:
 | API | Pinned version | What we use | Last verified |
 |---|---|---|---|
 | Anthropic Messages | `anthropic-version: 2023-06-01` | `/v1/messages`, `cache_control`, usage `cache_creation_input_tokens` / `cache_read_input_tokens`, SSE events | Verified 2026-10-03 against platform.claude.com prompt-caching docs: default TTL 5 min, optional 1h (`"ttl":"1h"`, 2x input price); TTL measured from request start. Minimum cacheable length is per model: 512 (Fable 5.x, Opus 5.x, Sonnet 5.5), 1024 (Opus 4/4.1, Sonnet 4/4.5/4.6, Opus 4.8, Sonnet 5), 2048 (Mythos Preview, Opus 4.7, Haiku 3.5), 4096 (Opus 4.5/4.6, Haiku 4.5); shorter prompts are processed uncached with no error. Max 4 `cache_control` breakpoints per request (exceeding returns 400). Usage fields: `cache_creation_input_tokens`, `cache_read_input_tokens`, `input_tokens` (uncached). Caching is opt-in: top-level automatic `cache_control` or per-block explicit breakpoints. Re-verify before each change to the model table. |
-| OpenAI Chat Completions | TBD | `/v1/chat/completions`, SSE `data:` chunks + `[DONE]`, `usage.prompt_tokens_details.cached_tokens`, min cacheable length | Not yet: verify before Phase 2. |
+| OpenAI Chat Completions | not version-pinned (unversioned REST) | `/v1/chat/completions`; SSE `data:` chunks ending `data: [DONE]`; usage `prompt_tokens`, `completion_tokens`, `prompt_tokens_details.cached_tokens` (cache reads only; no cache-write field); `prompt_tokens` includes cached tokens. | Partially verified 2026-11-01 against developers.openai.com prompt-caching guide: caching is automatic, prefix-exact, for prompts of 1,024+ tokens, hits in 128-token increments; the 1,024 minimum is stated for GPT-5.6 and later and varies for earlier models. **Not yet verified:** default retention window (adapter uses an unverified 300 s placeholder), `stream_options.include_usage` behavior (the gateway never injects it; streams without a usage chunk record null usage), and prompt-cache-related request params (`prompt_cache_key`, retention). Re-verify before relying on TTL classification in Phase 3. |
 | OpenAI-compatible providers (Azure, Groq, Together, Mistral, DeepSeek, xAI, OpenRouter, vLLM, Ollama) | TBD | per-provider cache usage fields (may be absent, then NOT_REPORTED) | Not yet: verify per provider before relying on it. |
 | OpenAI Responses | TBD | `/v1/responses`, cached-token usage | Not yet: verify before Phase 5. |
 | Google Gemini | TBD | `generateContent`, `streamGenerateContent`, implicit caching usage (`cachedContentTokenCount`) | Not yet: verify before Phase 5. |

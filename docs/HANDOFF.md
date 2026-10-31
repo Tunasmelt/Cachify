@@ -7,13 +7,13 @@ updated: 2026-10-24
 
 # Handoff
 
-**Current phase:** Phase 2 in progress. M2.1 and M2.2 merged. M2.3 hash-level diff (divergence index/kind) implemented on `phase-2/m2.3-diff`, PR open for audit; diff excerpts deferred. Phase 1 gate G1 is a conditional pass (live Anthropic check deferred).
+**Current phase:** Phase 2 code-complete pending review: M2.1, M2.2, M2.3 merged; M2.4 (openai-chat adapter) implemented on `phase-2/m2.4-openai-chat`, PR open for audit. Diff excerpts deferred to M3.2. Gate G2 review file still to write after M2.4 merges.
 
 **Orchestration workflow:** Codex CLI (`codex exec`, medium reasoning) implements one milestone at a time on its own branch, with an explicit "implementation only" instruction — it does not run `git add`/`commit`/`push`, does not open the PR, and does not self-audit or declare a milestone done. Claude reads Codex's full transcript (not just its summary, which has previously claimed success on a no-op run), independently re-runs the gate commands, reviews the diff line by line, stages, commits, pushes, opens the PR, watches CI, and posts the audit as a PR comment. The user merges (or Claude merges once told to). Dependabot PRs get the same treatment (audited, CI checked, merged) rather than auto-merge.
 
 **Branch protection on `main`:** PR required (0 approvals needed — solo repo, GitHub won't self-approve), status checks `ci`/`gitleaks`/`pip-audit` required and must be up to date with base, `enforce_admins` on, no force-push, no deletion.
 
-**Next action:** Audit and merge the M2.3 PR. Decide where diff-excerpt source text lives (A: in-memory LRU in full mode, B: persisted `segments.content` in full mode, C: wait for M3.2 bust events), then M2.4 (openai-chat adapter) and the G2 review. Still open: `--anthropic-live` integration test and repo secrets for G1.
+**Next action:** Audit and merge the M2.4 PR, then write `reviews/phase-2-gate.md` (G2). Open items: G1 live check needs the `PCG_ANTHROPIC_API_KEY` repo secret and a run of `integration.yml`; verify OpenAI cache retention TTL and `stream_options.include_usage` before Phase 3.
 
 **Blockers / pending decisions:**
 - Repo secrets for `integration.yml` (`PCG_ANTHROPIC_API_KEY`, `PCG_VECTOR_URL`, `PCG_VECTOR_API_KEY`) not yet set in GitHub; that workflow will fail if manually triggered until they are.
