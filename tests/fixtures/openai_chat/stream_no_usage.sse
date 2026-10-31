@@ -1,0 +1,10 @@
+data: {"id": "chatcmpl-test1", "object": "chat.completion.chunk", "created": 1760000000, "model": "gpt-test-2026-01-01", "choices": [{"index": 0, "delta": {"role": "assistant", "content": ""}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-test1", "object": "chat.completion.chunk", "created": 1760000000, "model": "gpt-test-2026-01-01", "choices": [{"index": 0, "delta": {"content": "Hi"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-test1", "object": "chat.completion.chunk", "created": 1760000000, "model": "gpt-test-2026-01-01", "choices": [{"index": 0, "delta": {"content": " there"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-test1", "object": "chat.completion.chunk", "created": 1760000000, "model": "gpt-test-2026-01-01", "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+
+data: [DONE]
+

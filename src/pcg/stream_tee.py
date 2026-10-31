@@ -3,14 +3,18 @@ import re
 from dataclasses import dataclass
 
 from pcg.adapters.anthropic import AnthropicAdapter
+from pcg.adapters.openai_chat import OpenAIChatAdapter
 from pcg.adapters.types import Usage
 
 
 @dataclass(frozen=True)
-class AnthropicStreamSummary:
+class StreamSummary:
     usage: Usage | None
     stop_reason: str | None
     complete: bool
+
+
+AnthropicStreamSummary = StreamSummary
 
 
 class StreamTee:
@@ -63,7 +67,7 @@ def _decode_data(data_lines: list[bytes]) -> object | None:
         return None
 
 
-def parse_anthropic_stream(data: bytes) -> AnthropicStreamSummary:
+def parse_anthropic_stream(data: bytes) -> StreamSummary:
     adapter = AnthropicAdapter()
     usage: Usage | None = None
     usage_data: dict[str, object] | None = None
@@ -119,7 +123,54 @@ def parse_anthropic_stream(data: bytes) -> AnthropicStreamSummary:
         elif event == b"message_stop":
             complete = True
 
-    return AnthropicStreamSummary(usage, stop_reason, complete)
+    return StreamSummary(usage, stop_reason, complete)
 
 
-__all__ = ["AnthropicStreamSummary", "StreamTee", "parse_anthropic_stream"]
+def parse_openai_chat_stream(data: bytes) -> StreamSummary:
+    """Summarize an OpenAI Chat Completions SSE stream (``data:`` chunks, then ``[DONE]``).
+
+    Usage only appears when the client set ``stream_options.include_usage``; otherwise it
+    stays ``None`` (unknown, not zero).
+    """
+    adapter = OpenAIChatAdapter()
+    usage: Usage | None = None
+    stop_reason: str | None = None
+    complete = False
+
+    for frame in re.split(rb"\r?\n\r?\n", data):
+        data_lines = [
+            value
+            for line in frame.splitlines()
+            if (value := _line_value(line, b"data:")) is not None
+        ]
+        if not data_lines:
+            continue
+        if b"\n".join(data_lines).strip() == b"[DONE]":
+            complete = True
+            continue
+        payload = _decode_data(data_lines)
+        if not isinstance(payload, dict):
+            continue
+
+        choices = payload.get("choices")
+        if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+            finish_reason = choices[0].get("finish_reason")
+            if isinstance(finish_reason, str):
+                stop_reason = finish_reason
+        chunk_usage = payload.get("usage")
+        if isinstance(chunk_usage, dict):
+            try:
+                usage = adapter.extract_usage({"usage": chunk_usage})
+            except ValueError:
+                usage = None
+
+    return StreamSummary(usage, stop_reason, complete)
+
+
+__all__ = [
+    "AnthropicStreamSummary",
+    "StreamSummary",
+    "StreamTee",
+    "parse_anthropic_stream",
+    "parse_openai_chat_stream",
+]

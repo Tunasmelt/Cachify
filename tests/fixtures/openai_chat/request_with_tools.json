@@ -1,0 +1,1 @@
+{"model": "gpt-test", "tools": [{"type": "function", "function": {"name": "get_time", "parameters": {"type": "object", "properties": {}}}}, {"type": "function", "function": {"name": "get_date", "parameters": {"type": "object", "properties": {}}}}], "messages": [{"role": "developer", "content": "Be terse."}, {"role": "user", "content": "What time is it?"}]}

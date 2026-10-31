@@ -1,11 +1,10 @@
-import json
 import re
 from collections.abc import Mapping
 
 from pcg.adapters import types as t
 from pcg.adapters.base import ProviderAdapter
 from pcg.config import WireFormat
-from pcg.segmenter import array_element_spans, decode_body, slice_bytes, top_level_spans
+from pcg.segmenter import array_element_spans, load_object, slice_bytes
 
 _MODEL_MINIMUMS = (
     (("fable", "5", "1"), 512),
@@ -79,12 +78,7 @@ class AnthropicAdapter(ProviderAdapter):
         headers: Mapping[str, str],
     ) -> t.CanonicalRequest:
         del headers
-        try:
-            data = json.loads(raw_body)
-        except (json.JSONDecodeError, UnicodeDecodeError) as error:
-            raise ValueError("request body must be a JSON object") from error
-        if not isinstance(data, dict):
-            raise ValueError("request body must be a JSON object")
+        data, text, spans = load_object(raw_body)
 
         model = data.get("model")
         if not isinstance(model, str) or not model:
@@ -92,12 +86,6 @@ class AnthropicAdapter(ProviderAdapter):
         stream = data.get("stream", False)
         if not isinstance(stream, bool):
             raise ValueError("stream must be a boolean")
-
-        text = decode_body(raw_body)
-        try:
-            spans = top_level_spans(text)
-        except (ValueError, json.JSONDecodeError) as error:
-            raise ValueError("request body must be a JSON object") from error
 
         # (kind, role, parsed value for inspection, exact bytes as sent)
         parts: list[tuple[t.SegmentKind, str | None, object, bytes]] = []

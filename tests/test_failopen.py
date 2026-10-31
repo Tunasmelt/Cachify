@@ -222,7 +222,7 @@ def test_stream_summary_failure_preserves_client_bytes(
         del data
         raise RuntimeError("synthetic stream summary failure")
 
-    monkeypatch.setattr("pcg.gateway.parse_anthropic_stream", fail_summary)
+    monkeypatch.setattr("pcg.wire.parse_anthropic_stream", fail_summary)
     app = create_app(make_settings(), transport=httpx.MockTransport(stream_handler(content)))
     with TestClient(app) as client:
         response = client.post("/v1/messages", content=request_body(stream=True))

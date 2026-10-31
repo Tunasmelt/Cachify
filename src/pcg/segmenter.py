@@ -81,8 +81,35 @@ def array_element_spans(text: str, span: Span) -> list[Span]:
         return elements
 
 
+def load_object(raw_body: bytes) -> tuple[dict[str, object], str, dict[str, Span]]:
+    """Parse a request body that must be a UTF-8 JSON object.
+
+    Returns the parsed object, the decoded text, and the span of each top-level value, so
+    callers can slice the exact bytes the client sent.
+    """
+    try:
+        data = json.loads(raw_body)
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise ValueError("request body must be a JSON object") from error
+    if not isinstance(data, dict):
+        raise ValueError("request body must be a JSON object")
+    text = decode_body(raw_body)
+    try:
+        spans = top_level_spans(text)
+    except (ValueError, json.JSONDecodeError) as error:
+        raise ValueError("request body must be a JSON object") from error
+    return data, text, spans
+
+
 def slice_bytes(text: str, span: Span) -> bytes:
     return text[span[0] : span[1]].encode("utf-8")
 
 
-__all__ = ["Span", "array_element_spans", "decode_body", "slice_bytes", "top_level_spans"]
+__all__ = [
+    "Span",
+    "array_element_spans",
+    "decode_body",
+    "load_object",
+    "slice_bytes",
+    "top_level_spans",
+]
