@@ -7,7 +7,7 @@ updated: 2026-10-24
 
 # Handoff
 
-**Current phase:** Phase 2 code-complete pending review: M2.1, M2.2, M2.3 merged; M2.4 (openai-chat adapter) implemented on `phase-2/m2.4-openai-chat`, PR open for audit. Diff excerpts deferred to M3.2. Gate G2 review file still to write after M2.4 merges.
+**Current phase:** Phase 2 code-complete pending review: M2.1, M2.2, M2.3 merged; M2.4 (openai-chat adapter) implemented on `phase-2/m2.4-openai-chat`, PR open for audit. Diff excerpts deferred to M3.2. Gate G2 review file still to write after M2.4 merges. Gates G0 (backfilled) and G1 (conditional pass, live check pending) are recorded in `reviews/`.
 
 **Orchestration workflow:** Codex CLI (`codex exec`, medium reasoning) implements one milestone at a time on its own branch, with an explicit "implementation only" instruction — it does not run `git add`/`commit`/`push`, does not open the PR, and does not self-audit or declare a milestone done. Claude reads Codex's full transcript (not just its summary, which has previously claimed success on a no-op run), independently re-runs the gate commands, reviews the diff line by line, stages, commits, pushes, opens the PR, watches CI, and posts the audit as a PR comment. The user merges (or Claude merges once told to). Dependabot PRs get the same treatment (audited, CI checked, merged) rather than auto-merge.
 
