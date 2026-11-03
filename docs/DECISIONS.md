@@ -1,8 +1,8 @@
 ---
 doc: DECISIONS
 status: append-only
-last_verified_commit: none (pre-repo)
-updated: 2026-09-25
+last_verified_commit: a4a0cda
+updated: 2026-11-03
 ---
 
 # Decision log (append-only)
@@ -16,7 +16,7 @@ Format: ID, date, status (Proposed | Accepted | Superseded by X), context, decis
 - Consequences: Python overhead on the hot path; keep hot path minimal, push analysis to background tasks.
 
 ## ADR-002: Anthropic first
-- Date: 2026-09-25 · Status: Accepted
+- Date: 2026-09-25 · Status: Accepted (phasing amended by ADR-011: openai-chat moved to Phase 2)
 - Context: Explicit `cache_control` breakpoints and separate cache write/read usage fields make bust detection precise.
 - Decision: AnthropicAdapter in Phase 1; OpenAI in Phase 5.
 - Consequences: Adapter interface must not leak Anthropic-specific shapes into core.
@@ -28,7 +28,7 @@ Format: ID, date, status (Proposed | Accepted | Superseded by X), context, decis
 - Consequences: Vector store is rebuildable; response bodies never depend on vector metadata limits.
 
 ## ADR-004: Vector store behind an interface, Qdrant as default
-- Date: 2026-09-25 · Status: Proposed (awaiting Harris's confirmation)
+- Date: 2026-09-25 · Status: Accepted (confirmed by ADR-010)
 - Context: Candidates compared on free tiers: Qdrant Cloud (1 GB free cluster, local in-process mode, payload filters), Pinecone Starter (2 GB, but 100 namespaces per index), Upstash Vector (free, 100 namespaces, 10K queries/day, 1536 max dims), Redis Cloud (free 30 MB).
 - Decision: Define `VectorStore` interface. Default backend Qdrant (local mode for dev/CI, Qdrant Cloud free for hosted). Pinecone and Upstash adapters as optional.
 - Consequences: If namespaces are used for scoping, Pinecone/Upstash free tiers cap distinct fingerprints at 100 per index; adapters for those must scope with metadata filters instead.

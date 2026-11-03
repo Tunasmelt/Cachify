@@ -1,8 +1,8 @@
 ---
 doc: PHASES
 status: draft
-last_verified_commit: none (pre-repo)
-updated: 2026-09-25
+last_verified_commit: a4a0cda
+updated: 2026-11-03
 ---
 
 # Phases → milestones → gates
@@ -18,8 +18,8 @@ pytest -q
 
 ## Delivery workflow (ADR-014)
 - One milestone = one branch (`phase-N/mN.M-slug`) = one PR into `main`. No direct pushes to `main`.
-- Codex implements on the branch and opens the PR. PR body: milestone ID, REQ-IDs covered, tests added, security checklist items touched.
-- Claude audits before merge: runs the gate commands locally, reviews the diff against the docs and SECURITY.md, and records the result as a PR review (approve, or request changes and send back to Codex).
+- Codex implements on the branch (implementation only: no git writes, no PR, no self-audit). Claude verifies, commits, pushes and opens the PR. PR body: milestone ID, REQ-IDs covered, tests added, security checklist items touched.
+- Claude audits before merge: runs the gate commands locally, reviews the diff against the docs and SECURITY.md, and posts the result as a PR comment (GitHub does not let the PR author approve their own PR; request changes by sending the work back to Codex).
 - Merge only when CI is green and the audit passes (squash merge). Update HANDOFF/CHANGELOG (and DECISIONS if a decision changed) in the same PR.
 - Final PR of each phase adds `reviews/phase-N-gate.md`.
 

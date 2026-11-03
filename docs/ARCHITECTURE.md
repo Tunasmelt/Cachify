@@ -1,8 +1,8 @@
 ---
 doc: ARCHITECTURE
 status: draft
-last_verified_commit: none (pre-repo)
-updated: 2026-09-25
+last_verified_commit: a4a0cda
+updated: 2026-11-03
 ---
 
 # Architecture
@@ -75,8 +75,8 @@ Uses a shared `httpx.AsyncClient` with connection pooling.
 - Else: among recent requests (window, OQ-3) with same tenant + model, pick the one with the longest common `raw_hash` prefix.
 
 ### 6. Diff Engine
-- Finds first index where `raw_hash` differs.
-- Produces a unified text diff of that segment (bounded length) plus segment metadata.
+- Finds first index where `raw_hash` differs and classifies it (`none`, `append`, `truncated`, `serialization`, `content`). Implemented (M2.3).
+- Planned (M3.2): a unified text diff of that segment (bounded length). Not built yet; it needs the predecessor's text, which is not stored today.
 
 ### 7. Classifier
 Inputs: divergence index, breakpoint positions, time since predecessor, usage numbers, model, and the adapter's `CacheProfile`. Rules are selected by `cache_mode`: EXPLICIT_BREAKPOINT uses breakpoints as below; AUTO_PREFIX has no breakpoints, so HEALTHY/BUST is judged from the first divergence versus `min_cacheable_tokens` and the provider's cache granularity; NONE or `usage_reporting = none` yields NOT_REPORTED.
@@ -119,7 +119,8 @@ Diagnosis rules for BUST (REQ-BD-07) run against the diff: regexes for ISO times
 requests(
   id uuid pk, created_at, tenant_hash, session_id null, model,
   wire_format, upstream, cache_mode,
-  predecessor_id null fk requests, divergence_index null,
+  predecessor_id null fk requests, lineage_source null (session|inferred),
+  divergence_index null, divergence_kind null (none|append|truncated|serialization|content),
   classification, diagnosis null,
   input_tokens, cache_write_tokens null, cache_read_tokens null, output_tokens,
   latency_ms, upstream_status, semantic_result (hit|miss|bypass|ineligible),
@@ -143,6 +144,8 @@ bodies(
   id pk, request_id fk, prompt jsonb null, response jsonb null, expires_at
 )
 ```
+
+Built so far: `requests` (without classification, diagnosis or semantic columns) and `segments`, via Alembic migrations 0001-0004. `bust_events`, `cache_entries` and `bodies` are planned. The `requests` table is defined twice (SQLAlchemy Table and migration 0001); see ADR-015.
 
 Access control: single-tenant deployment in v1. No Supabase/RLS (ADR-007). Admin API protected by gateway token; every query filters by tenant_hash where applicable.
 
