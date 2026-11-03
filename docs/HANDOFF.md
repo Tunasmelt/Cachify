@@ -13,12 +13,12 @@ updated: 2026-11-03
 
 **Branch protection on `main`:** PR required (0 approvals needed — solo repo, GitHub won't self-approve), status checks `ci`/`gitleaks`/`pip-audit` required and must be up to date with base, `enforce_admins` on, no force-push, no deletion.
 
-**Next action:** Plan Phase 3, M3.1 (classifier with all seven classes, rules selected by `cache_mode`). The pre-M3 questions are decided: OpenAI lifetime is a lower bound (ADR-017) and diff excerpts are `full`-mode only, via an LRU into `bust_events` (ADR-018). M3.1 must add the AUTO_PREFIX upper-bound setting from ADR-017. To close G1: set the `PCG_ANTHROPIC_API_KEY` repo secret and run `integration.yml`.
+**Next action:** Phase 3, M3.2 (diagnosis rule set, plus the readable diff excerpt per ADR-018: `full`-mode only, in-memory LRU into `bust_events`). M3.1 (classifier) is done: see ARCHITECTURE.md section 7 for the rules and the approximations M3.2 may need to refine (`truncated` divergence treated as an intact prefix; AUTO_PREFIX prefix size estimated from bytes). Then M3.3 (CLI, including `pcg serve`). To close G1: set the `PCG_ANTHROPIC_API_KEY` repo secret and run `integration.yml`.
 
 **Blockers / pending decisions:**
 - Repo secrets for `integration.yml` (`PCG_ANTHROPIC_API_KEY`, `PCG_VECTOR_URL`, `PCG_VECTOR_API_KEY`) not yet set in GitHub; that workflow will fail if manually triggered until they are.
 - ADR-008 embedding model: confirm local model (default proposal: fastembed bge-small, 384 dims); the Qdrant collection vector size depends on it. Matters from Phase 4.
-- Qdrant Cloud: cluster URL and API key are in the local gitignored `.env`; connection not yet tested. The key was pasted into chat, so rotate it.
+- Qdrant Cloud: cluster URL and API key are in the local gitignored `.env`; connection not yet tested. The key that was pasted into chat has been rotated (2026-11-03); put the new one only in the local `.env`.
 - Re-verify provider caching facts in API.md before each provider's phase (Anthropic before Phase 1, OpenAI-chat before Phase 2, others before Phase 5).
 - `dependabot.yml` uses `package-ecosystem: "pip"`; GitHub's `"uv"` ecosystem may be more precise, unverified — low priority.
 - OQ-5: project name (see PRODUCT.md for the current naming).

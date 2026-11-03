@@ -44,6 +44,7 @@ requests = Table(
     Column("lineage_source", Text, nullable=True),
     Column("divergence_index", Integer, nullable=True),
     Column("divergence_kind", Text, nullable=True),
+    Column("classification", Text, nullable=True),
     Index("ix_requests_tenant_hash_created_at", "tenant_hash", "created_at"),
     Index("ix_requests_tenant_hash_session_id", "tenant_hash", "session_id", "created_at"),
 )
@@ -86,6 +87,14 @@ class RequestRecord:
     lineage_source: str | None = None
     divergence_index: int | None = None
     divergence_kind: str | None = None
+    classification: str | None = None
+
+
+@dataclass(frozen=True)
+class PredecessorSummary:
+    created_at: str
+    cache_read_tokens: int | None
+    cache_write_tokens: int | None
 
 
 @dataclass(frozen=True)
@@ -170,6 +179,14 @@ class RequestStore:
         with self.engine.connect() as connection:
             return [(raw, canon) for raw, canon in connection.execute(query)]
 
+    def predecessor_summary(self, request_id: str) -> PredecessorSummary | None:
+        query = select(
+            requests.c.created_at, requests.c.cache_read_tokens, requests.c.cache_write_tokens
+        ).where(requests.c.id == request_id)
+        with self.engine.connect() as connection:
+            row = connection.execute(query).first()
+        return PredecessorSummary(row[0], row[1], row[2]) if row is not None else None
+
     def count(self) -> int:
         with self.engine.connect() as connection:
             return int(connection.scalar(select(func.count()).select_from(requests)) or 0)
@@ -178,4 +195,12 @@ class RequestStore:
         self.engine.dispose()
 
 
-__all__ = ["RequestRecord", "RequestStore", "SegmentRow", "metadata", "requests", "segments"]
+__all__ = [
+    "PredecessorSummary",
+    "RequestRecord",
+    "RequestStore",
+    "SegmentRow",
+    "metadata",
+    "requests",
+    "segments",
+]
