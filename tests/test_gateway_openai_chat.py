@@ -269,3 +269,21 @@ def test_prefix_lineage_and_divergence_work_for_openai_chat(tmp_path: Path) -> N
     one, two = rows_at(db_path)
     assert (two["predecessor_id"], two["lineage_source"]) == (one["id"], "inferred")
     assert (two["divergence_index"], two["divergence_kind"]) == (2, "append")
+
+
+def test_requests_are_classified_end_to_end(tmp_path: Path) -> None:
+    db_path = tmp_path / "pcg.db"
+    body = fixture_bytes("response_plain.json")
+    statuses = iter([200, 200, 500])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        status = next(statuses)
+        return httpx.Response(status, content=body, headers={"content-type": "application/json"})
+
+    with client_for(handler, db_path) as client:
+        for _ in range(3):
+            client.post("/v1/chat/completions", content=request_body(), headers=AUTH)
+
+    classes = [row["classification"] for row in rows_at(db_path)]
+    assert classes == ["COLD_START", "HEALTHY", None]

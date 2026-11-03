@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     sim_threshold: float = Field(default=0.85, ge=0, le=1)
     cache_ttl_s: int = Field(default=3600, gt=0)
     provider_cache_ttl_s: int = Field(default=300, gt=0)
+    autoprefix_cache_ttl_max_s: int = Field(default=86400, gt=0)
     log_mode: Literal["off", "hash", "full"] = "hash"
     body_retention_h: int = Field(default=24, gt=0)
     lineage_window_requests: int = Field(default=50, gt=0)

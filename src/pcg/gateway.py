@@ -10,6 +10,7 @@ from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from pcg.adapters.types import CanonicalRequest, Usage
+from pcg.classify import ClassifyConfig
 from pcg.config import Settings, WireFormat
 from pcg.failopen import aguard, analysis_errors, guard
 from pcg.lineage import insert_with_lineage
@@ -51,6 +52,7 @@ async def _insert_record(
     segment_rows: Sequence[SegmentRow],
     window_requests: int,
     window_s: int,
+    classify: ClassifyConfig | None,
 ) -> None:
     await asyncio.to_thread(
         insert_with_lineage,
@@ -59,6 +61,7 @@ async def _insert_record(
         segment_rows,
         window_requests=window_requests,
         window_s=window_s,
+        classify=classify,
     )
 
 
@@ -198,6 +201,15 @@ def create_app(
             lambda: adapter.cache_profile().cache_mode.value,
             default="unknown",
         )
+        classify_config: ClassifyConfig | None = guard(
+            "classify_config",
+            lambda: ClassifyConfig(
+                profile=adapter.cache_profile(),
+                ttl_s=settings.provider_cache_ttl_s,
+                ttl_max_s=settings.autoprefix_cache_ttl_max_s,
+            ),
+            default=None,
+        )
 
         def make_record(
             *,
@@ -260,6 +272,7 @@ def create_app(
                     rows,
                     window_requests=settings.lineage_window_requests,
                     window_s=settings.lineage_window_s,
+                    classify=classify_config,
                     default=None,
                 )
 
@@ -425,6 +438,7 @@ def create_app(
                                 rows,
                                 settings.lineage_window_requests,
                                 settings.lineage_window_s,
+                                classify_config,
                                 default=None,
                             )
                     guard(

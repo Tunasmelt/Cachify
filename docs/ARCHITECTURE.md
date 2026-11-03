@@ -79,6 +79,8 @@ Uses a shared `httpx.AsyncClient` with connection pooling.
 - Planned (M3.2, ADR-018): a length-capped text excerpt of that segment, produced only in `full` log mode from a bounded in-memory LRU of recent segment text and stored in `bust_events.diff_excerpt` with an expiry. Not built yet. In `hash` and `off` modes it is always NULL.
 
 ### 7. Classifier
+Implemented in M3.1 (`pcg/classify.py`), run at insert time behind the fail-open guard and stored in `requests.classification` (NULL when the upstream call failed or classification errored). Order of rules: failed upstream -> none; `NOT_REPORTED`; `COLD_START`; then the mode-specific rules. EXPLICIT_BREAKPOINT: cache read > 0 is `HEALTHY` (`BUST` if a change before the last breakpoint reduced the read below the predecessor's cached total); read of 0 is `BELOW_MIN_LENGTH` if the total prompt is under the model minimum, else `BUST` if a content or serialization change sits at or before the last breakpoint, else `TTL_EXPIRED` if a breakpoint exists and the gap exceeds the TTL, else `UNEXPLAINED`. AUTO_PREFIX: same shape, but a change counts only if the estimated prefix before it (bytes / 4) is under the minimum, and `TTL_EXPIRED` needs the gap beyond `PCG_AUTOPREFIX_CACHE_TTL_MAX_S`. A `truncated` divergence is treated as an intact prefix for now. Unknown (NULL) cache reads are `NOT_REPORTED`, never zero.
+
 Inputs: divergence index, breakpoint positions, time since predecessor, usage numbers, model, and the adapter's `CacheProfile`. Rules are selected by `cache_mode`: EXPLICIT_BREAKPOINT uses breakpoints as below; AUTO_PREFIX has no breakpoints, so HEALTHY/BUST is judged from the first divergence versus `min_cacheable_tokens` and the provider's cache granularity; NONE or `usage_reporting = none` yields NOT_REPORTED. For AUTO_PREFIX providers, provider cache lifetime is only a lower bound (ADR-017), so TTL_EXPIRED needs a gap beyond a configured upper bound, not just beyond `default_ttl_s`.
 
 | Class | Rule (simplified) |
@@ -145,7 +147,7 @@ bodies(
 )
 ```
 
-Built so far: `requests` (without classification, diagnosis or semantic columns) and `segments`, via Alembic migrations 0001-0004. `bust_events`, `cache_entries` and `bodies` are planned. The `requests` table is defined twice (SQLAlchemy Table and migration 0001); see ADR-015.
+Built so far: `requests` (with `classification`; no diagnosis or semantic columns) and `segments`, via Alembic migrations 0001-0005. `bust_events`, `cache_entries` and `bodies` are planned. The `requests` table is defined twice (SQLAlchemy Table and migration 0001); see ADR-015.
 
 Access control: single-tenant deployment in v1. No Supabase/RLS (ADR-007). Admin API protected by gateway token; every query filters by tenant_hash where applicable.
 
@@ -163,7 +165,8 @@ Access control: single-tenant deployment in v1. No Supabase/RLS (ADR-007). Admin
 | `PCG_EMBED_MODEL` | Embedding model id. |
 | `PCG_SIM_THRESHOLD` | Default similarity threshold. |
 | `PCG_CACHE_TTL_S` | Semantic cache entry TTL. |
-| `PCG_PROVIDER_CACHE_TTL_S` | Assumed provider cache TTL for classification (default 300). |
+| `PCG_PROVIDER_CACHE_TTL_S` | Assumed provider cache TTL for EXPLICIT_BREAKPOINT classification (default 300). |
+| `PCG_AUTOPREFIX_CACHE_TTL_MAX_S` | AUTO_PREFIX classification: a gap beyond this is the only time `TTL_EXPIRED` is asserted, since those providers' lifetime is only a lower bound (ADR-017). Default 86400 (24 h). |
 | `PCG_LOG_MODE` | `off` \| `hash` \| `full`. |
 | `PCG_BODY_RETENTION_H` | Body retention window. |
 | `PCG_LINEAGE_WINDOW_REQUESTS`, `PCG_LINEAGE_WINDOW_S` | Prefix-inference window: compare against at most this many recent same-tenant, same-model requests (default 50) no older than this many seconds (default 3600). |

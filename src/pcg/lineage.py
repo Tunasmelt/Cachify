@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 
+from pcg.classify import ClassifyConfig, resolve_classification
 from pcg.diff import Divergence, resolve_divergence
 from pcg.failopen import guard
 from pcg.store import RequestRecord, RequestStore, SegmentRow
@@ -77,8 +78,10 @@ def insert_with_lineage(
     *,
     window_requests: int,
     window_s: int,
+    classify: ClassifyConfig | None = None,
 ) -> None:
-    """Insert the request; a lineage failure never blocks the insert (fail-open)."""
+    """Insert the request; a lineage or classification failure never blocks it (fail-open)."""
+    divergence: Divergence | None = None
     predecessor: Predecessor | None = guard(
         "lineage",
         resolve_predecessor,
@@ -95,7 +98,7 @@ def insert_with_lineage(
             predecessor_id=predecessor.request_id,
             lineage_source=predecessor.source,
         )
-        divergence: Divergence | None = guard(
+        divergence = guard(
             "diff",
             resolve_divergence,
             store,
@@ -109,6 +112,19 @@ def insert_with_lineage(
                 divergence_index=divergence.index,
                 divergence_kind=divergence.kind.value,
             )
+    if classify is not None:
+        classification = guard(
+            "classify",
+            resolve_classification,
+            store,
+            record,
+            divergence,
+            segment_rows,
+            classify,
+            default=None,
+        )
+        if classification is not None:
+            record = replace(record, classification=classification.value)
     store.insert(record, segment_rows)
 
 

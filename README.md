@@ -48,8 +48,8 @@ Cachify has two components behind one proxy:
 | Byte-exact segments with raw and canonical hashes | Working |
 | Lineage: link a request to its predecessor by session header or longest-prefix inference | Working |
 | First-divergence index and kind (`append`, `truncated`, `serialization`, `content`) | Working |
-| Bust classification and diagnosis (HEALTHY, COLD_START, TTL_EXPIRED, BUST, ...) | Planned (Phase 3) |
-| `pcg report` / `pcg busts` CLI, readable diff excerpts | Planned (Phase 3) |
+| Classification of each request (HEALTHY, COLD_START, TTL_EXPIRED, BELOW_MIN_LENGTH, BUST, UNEXPLAINED, NOT_REPORTED) | Working |
+| Bust diagnosis (why it busted), `pcg report` / `pcg busts` CLI, readable diff excerpts | Planned (Phase 3) |
 | Semantic cache with replay (JSON and SSE) | Planned (Phase 4) |
 | Admin API, dashboard, OpenAI Responses and Gemini adapters | Planned (Phase 5) |
 
@@ -120,6 +120,7 @@ startup. Only **hashes and metadata** are stored, never prompt text or API keys:
   `tenant_hash` of the client key, predecessor, and divergence index/kind.
 - `segments`: per request and per segment, kind, role, `raw_hash`, `canon_hash`, byte length, and
   whether it carries a cache breakpoint.
+- Each `requests` row also carries a `classification` (see above), `NULL` if the upstream call failed.
 
 Token usage is normalized across providers: `input_tokens` always means **uncached** input
 ([ADR-016](docs/DECISIONS.md)). Cache fields the provider does not report are stored as `NULL`
@@ -135,6 +136,8 @@ Token usage is normalized across providers: `input_tokens` always means **uncach
 | `PCG_DB_URL` | SQLite path or Postgres URL (default `sqlite:///./pcg.db`). |
 | `PCG_LOG_MODE` | `off` \| `hash` \| `full` (default `hash`). |
 | `PCG_LINEAGE_WINDOW_REQUESTS`, `PCG_LINEAGE_WINDOW_S` | Prefix-inference window (default 50 requests / 3600 s). |
+| `PCG_PROVIDER_CACHE_TTL_S` | Assumed Anthropic-style cache TTL for classification (default 300 s). |
+| `PCG_AUTOPREFIX_CACHE_TTL_MAX_S` | OpenAI-style providers: only a gap beyond this counts as `TTL_EXPIRED` (default 86400 s). |
 
 The remaining variables in `.env.example` (vector backend, embeddings, semantic-cache thresholds,
 admin token) are reserved for later phases. The full table is in
@@ -143,14 +146,14 @@ admin token) are reserved for later phases. The full table is in
 ## Roadmap
 
 Delivery is one milestone per branch and pull request, with a written gate review at the end of each
-phase (`reviews/`). 12 of 28 milestones are done.
+phase (`reviews/`). 13 of 28 milestones are done.
 
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Bootstrap: repo skeleton, config loader, CI | Done |
 | 1 | Passthrough proxy: Anthropic, streaming, request records, fail-open | Done (gate: conditional, live check pending) |
 | 2 | Segmentation, lineage, first-divergence diff, openai-chat adapter | Done (gate: conditional, readable diff excerpt deferred) |
-| 3 | Classification of every request (HEALTHY / BUST / TTL_EXPIRED / ...), diagnosis rules, CLI | Next |
+| 3 | Classification of every request (HEALTHY / BUST / TTL_EXPIRED / ...), diagnosis rules, CLI | In progress (classifier done) |
 | 4 | Semantic response cache (embeddings, vector store, SSE replay, expiry) | Planned |
 | 5 | Admin API, dashboard, OpenAI Responses and Gemini adapters | Planned |
 | 6 | Bust-trace corpus, latency benchmark, Docker and deploy | Planned |
