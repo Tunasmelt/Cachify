@@ -76,10 +76,10 @@ Uses a shared `httpx.AsyncClient` with connection pooling.
 
 ### 6. Diff Engine
 - Finds first index where `raw_hash` differs and classifies it (`none`, `append`, `truncated`, `serialization`, `content`). Implemented (M2.3).
-- Planned (M3.2): a unified text diff of that segment (bounded length). Not built yet; it needs the predecessor's text, which is not stored today.
+- Planned (M3.2, ADR-018): a length-capped text excerpt of that segment, produced only in `full` log mode from a bounded in-memory LRU of recent segment text and stored in `bust_events.diff_excerpt` with an expiry. Not built yet. In `hash` and `off` modes it is always NULL.
 
 ### 7. Classifier
-Inputs: divergence index, breakpoint positions, time since predecessor, usage numbers, model, and the adapter's `CacheProfile`. Rules are selected by `cache_mode`: EXPLICIT_BREAKPOINT uses breakpoints as below; AUTO_PREFIX has no breakpoints, so HEALTHY/BUST is judged from the first divergence versus `min_cacheable_tokens` and the provider's cache granularity; NONE or `usage_reporting = none` yields NOT_REPORTED.
+Inputs: divergence index, breakpoint positions, time since predecessor, usage numbers, model, and the adapter's `CacheProfile`. Rules are selected by `cache_mode`: EXPLICIT_BREAKPOINT uses breakpoints as below; AUTO_PREFIX has no breakpoints, so HEALTHY/BUST is judged from the first divergence versus `min_cacheable_tokens` and the provider's cache granularity; NONE or `usage_reporting = none` yields NOT_REPORTED. For AUTO_PREFIX providers, provider cache lifetime is only a lower bound (ADR-017), so TTL_EXPIRED needs a gap beyond a configured upper bound, not just beyond `default_ttl_s`.
 
 | Class | Rule (simplified) |
 |---|---|

@@ -43,3 +43,4 @@ last_verified_commit: none (pre-repo)
 
 ## 2026-11-03
 - Documentation review fixes: README milestone count corrected (12 of 28); PHASES delivery workflow aligned with HANDOFF (Codex implements only, Claude opens the PR and posts the audit as a comment); ARCHITECTURE data model and Diff Engine updated to what is built; API.md marks what is implemented; ADR-002 and ADR-004 statuses updated; front matter refreshed.
+- Pre-M3 decisions. OpenAI prompt-cache lifetime and `stream_options.include_usage` verified against OpenAI's docs (API.md); ADR-017 treats OpenAI lifetime as a lower bound, so TTL_EXPIRED is not asserted from the 300 s value alone; ADR-018 stores diff excerpts only in `full` mode (in-memory LRU into `bust_events`). Adapter TTL comment updated; no behavior change.

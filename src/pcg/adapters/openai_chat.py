@@ -14,7 +14,10 @@ from pcg.segmenter import array_element_spans, load_object, slice_bytes
 
 # Documented minimum for current models; earlier models vary (docs/API.md).
 _MIN_CACHEABLE_TOKENS = 1024
-# Unverified placeholder: OpenAI's retention window for Chat Completions is not yet confirmed.
+# Conservative lower bound, verified 2026-11-03 (docs/API.md, ADR-017): OpenAI has no single TTL.
+# Earlier models keep entries ~5 to 10 minutes of inactivity (`in_memory`) or up to 24 h; GPT-5.6+
+# guarantees at least 30 minutes. A gap under 300 s is always inside the window; a longer gap is not
+# proof of expiry, so the classifier must not assert TTL_EXPIRED from this value alone.
 _DEFAULT_TTL_S = 300
 _SYSTEM_ROLES = frozenset({"system", "developer"})
 
