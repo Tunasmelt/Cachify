@@ -96,6 +96,26 @@ def test_parse_request_orders_segments_and_finds_breakpoints() -> None:
     assert [segment.has_breakpoint for segment in request.segments] == [False, True, False, True]
 
 
+def test_top_level_cache_control_marks_the_last_segment_as_the_breakpoint() -> None:
+    body = (
+        b'{"model":"claude-sonnet-5-5","max_tokens":8,"cache_control":{"type":"ephemeral"},'
+        b'"system":"be brief","messages":[{"role":"user","content":"hi"},'
+        b'{"role":"assistant","content":"hello"},{"role":"user","content":"more"}]}'
+    )
+    request = AnthropicAdapter().parse_request(body, {})
+
+    assert [segment.has_breakpoint for segment in request.segments] == [False, False, False, True]
+
+
+def test_no_cache_control_means_no_breakpoint() -> None:
+    body = (
+        b'{"model":"claude-sonnet-5-5","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}'
+    )
+    request = AnthropicAdapter().parse_request(body, {})
+
+    assert [segment.has_breakpoint for segment in request.segments] == [False]
+
+
 def test_replay_methods_are_deferred() -> None:
     adapter = AnthropicAdapter()
 

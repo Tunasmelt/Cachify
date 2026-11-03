@@ -26,7 +26,8 @@ pytest -q
 ## GitHub Actions
 | Workflow | Trigger | Jobs |
 |---|---|---|
-| `ci.yml` | PR + push to `main` | lint (ruff), types (mypy), tests (pytest, marker-selected per phase, Python matrix as needed), gitleaks secret scan, `pip-audit`. Uses no cloud secrets. |
+| `ci.yml` | PR + push to `main` | lint (ruff), format check, types (mypy), the full test suite (`pytest -q`, which includes every phase marker; no Python matrix yet) and a package import check. Uses no cloud secrets. |
+| `gitleaks.yml`, `pip-audit.yml` | PR + push to `main` | Secret scan and dependency audit, as separate required checks. |
 | `integration.yml` | manual `workflow_dispatch` (and nightly optional) | `pytest -m integration` against live providers / Qdrant Cloud using repo secrets. Never runs on fork PRs. |
 | `dashboard.yml` (Phase 5) | PR touching `dashboard/` | `pnpm build && pnpm test`. |
 | `release.yml` (Phase 6) | version tag `v*` | build Docker image, scan it, publish to registry (chosen at M6.3), run migration check. |
