@@ -1,5 +1,6 @@
 import re
 from collections.abc import Mapping
+from dataclasses import replace
 
 from pcg.adapters import types as t
 from pcg.adapters.base import ProviderAdapter
@@ -133,6 +134,9 @@ class AnthropicAdapter(ProviderAdapter):
             )
             for index, (kind, role, value, raw) in enumerate(parts)
         )
+        if segments and isinstance(data.get("cache_control"), dict):
+            # Automatic caching: the provider places the breakpoint on the last cacheable block.
+            segments = (*segments[:-1], replace(segments[-1], has_breakpoint=True))
         excluded = {"model", "stream", "tools", "system", "messages"}
         params = {key: value for key, value in data.items() if key not in excluded}
         return t.CanonicalRequest(model, stream, segments, params)

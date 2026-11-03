@@ -15,7 +15,7 @@ Deliberate approximations, each revisited in M3.2 if the diagnosis rules need mo
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 
 from pcg.adapters.types import CacheMode, CacheProfile, UsageReporting
@@ -46,9 +46,12 @@ _CHANGED = frozenset({DivergenceKind.SERIALIZATION, DivergenceKind.CONTENT})
 
 
 def _gap_s(record: RequestRecord, predecessor: PredecessorSummary) -> float:
-    return (
-        datetime.fromisoformat(record.created_at) - datetime.fromisoformat(predecessor.created_at)
-    ).total_seconds()
+    """Seconds between the two request starts (``created_at`` is completion time)."""
+    started = datetime.fromisoformat(record.created_at) - timedelta(milliseconds=record.latency_ms)
+    before = datetime.fromisoformat(predecessor.created_at) - timedelta(
+        milliseconds=predecessor.latency_ms
+    )
+    return (started - before).total_seconds()
 
 
 def _predecessor_cached(predecessor: PredecessorSummary, mode: CacheMode) -> int | None:
@@ -66,12 +69,15 @@ def classify(
     segment_rows: Sequence[SegmentRow],
     config: ClassifyConfig,
 ) -> CacheClass | None:
-    """None when the request failed upstream, since there is no cache outcome to explain."""
+    """None when there is no cache outcome to explain: the upstream call failed, or the stream
+    was cut off or not fully captured and so reported no usage."""
     status = record.upstream_status
     if status is None or not 200 <= status < 300:
         return None
     profile = config.profile
     read = record.cache_read_tokens
+    if read is None and (record.truncated or record.complete == 0):
+        return None
     if (
         profile.cache_mode is CacheMode.NONE
         or profile.usage_reporting is UsageReporting.NONE

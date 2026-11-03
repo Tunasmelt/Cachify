@@ -92,9 +92,10 @@ class RequestRecord:
 
 @dataclass(frozen=True)
 class PredecessorSummary:
-    created_at: str
+    created_at: str  # completion time; subtract latency_ms for the request start
     cache_read_tokens: int | None
     cache_write_tokens: int | None
+    latency_ms: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -181,11 +182,14 @@ class RequestStore:
 
     def predecessor_summary(self, request_id: str) -> PredecessorSummary | None:
         query = select(
-            requests.c.created_at, requests.c.cache_read_tokens, requests.c.cache_write_tokens
+            requests.c.created_at,
+            requests.c.cache_read_tokens,
+            requests.c.cache_write_tokens,
+            requests.c.latency_ms,
         ).where(requests.c.id == request_id)
         with self.engine.connect() as connection:
             row = connection.execute(query).first()
-        return PredecessorSummary(row[0], row[1], row[2]) if row is not None else None
+        return PredecessorSummary(row[0], row[1], row[2], row[3]) if row is not None else None
 
     def count(self) -> int:
         with self.engine.connect() as connection:

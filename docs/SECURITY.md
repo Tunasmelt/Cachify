@@ -15,9 +15,9 @@ Plain version: this gateway sees every prompt, every answer, and every API key t
 |---|---|---|
 | Gateway ingress | Unauthenticated use of admin routes | `PCG_ADMIN_TOKEN` required on `/pcg/*`; constant-time compare. |
 | Gateway ingress | Abuse as open proxy | Bind to localhost by default; upstream allowlist; optional client token. |
-| Provider adapter | API key leakage | Keys forwarded in memory only; stored as salted hash (`tenant_hash`); log redaction filter for `x-api-key` / `authorization`. |
-| Provider adapter | SSRF via configurable upstream | Upstream URLs from env only (`PCG_UPSTREAMS`), validated against allowlist at startup; clients select by name only; unknown names rejected. |
-| Provider adapter | Key leakage across auth styles | Redaction filter covers `x-api-key`, `authorization`, `x-goog-api-key` and any `key=` query param; per-upstream key-leak grep test. |
+| Provider adapter | API key leakage | Keys forwarded in memory only; stored only as a keyed hash (`tenant_hash`, HMAC-SHA256); no code logs request headers, and tests grep the DB and log output for the key. A logging redaction filter is planned (Phase 6) as defense in depth; it does not exist yet. |
+| Provider adapter | SSRF via configurable upstream | Upstream URLs come from env only (`PCG_UPSTREAMS`), so the operator is the allowlist; clients select by name only and unknown names are rejected. Startup checks that `base_url` is non-empty; scheme and host validation (https, no link-local or metadata addresses) is planned (Phase 6). |
+| Provider adapter | Key leakage across auth styles | Only the adapter's own auth header names are forwarded (`x-api-key` for anthropic, `authorization`, `openai-organization`, `openai-project` for openai-chat); per-upstream key-leak grep tests cover both styles built so far. `x-goog-api-key` and `key=` query params arrive with the Gemini adapter (Phase 5). |
 | Stream tee | Memory blowup on huge streams | Bounded internal buffer; drop analysis (not the client stream) if exceeded. |
 | Store / bodies | Sensitive prompt data at rest | Log mode default `hash`; `full` is opt-in; retention job deletes bodies after `PCG_BODY_RETENTION_H`. |
 | Diff engine | Leaks content via diff excerpts | Excerpts obey log mode; truncated length cap. |

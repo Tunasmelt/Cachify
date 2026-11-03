@@ -40,6 +40,9 @@ def request(
     gap_s: float = 10,
     status: int | None = 200,
     mode: str = "explicit_breakpoint",
+    latency_ms: float = 0.0,
+    complete: int | None = None,
+    truncated: int = 0,
 ) -> RequestRecord:
     return RequestRecord(
         id="r2",
@@ -52,19 +55,21 @@ def request(
         model="claude-sonnet-5-5",
         stream=0,
         upstream_status=status,
-        complete=None,
-        truncated=0,
+        complete=complete,
+        truncated=truncated,
         input_tokens=input_tokens,
         output_tokens=10,
         cache_write_tokens=write,
         cache_read_tokens=read,
-        latency_ms=1.0,
+        latency_ms=latency_ms,
         log_mode="hash",
     )
 
 
-def previous(read: int | None = 0, write: int | None = 0) -> PredecessorSummary:
-    return PredecessorSummary(T0.isoformat(), read, write)
+def previous(
+    read: int | None = 0, write: int | None = 0, latency_ms: float = 0.0
+) -> PredecessorSummary:
+    return PredecessorSummary(T0.isoformat(), read, write, latency_ms)
 
 
 def rows(*, breakpoint_at: int | None = None, sizes: Sequence[int] = (100, 100, 100)) -> list:
@@ -92,6 +97,40 @@ def test_failed_upstream_request_is_not_classified() -> None:
 
 def test_provider_that_reports_nothing_is_not_reported() -> None:
     assert classify(request(), previous(), SAME, rows(), NO_CACHE) is CacheClass.NOT_REPORTED
+
+
+@pytest.mark.parametrize("fields", [{"truncated": 1}, {"complete": 0}])
+def test_cut_off_stream_without_usage_is_not_classified(fields: dict[str, int]) -> None:
+    for config in (ANTHROPIC, OPENAI):
+        record = request(read=None, **fields)
+        assert classify(record, previous(), SAME, rows(), config) is None
+
+
+def test_cut_off_stream_that_still_reported_usage_is_classified() -> None:
+    result = classify(
+        request(read=4000, complete=0), previous(write=4000), APPEND, rows(), ANTHROPIC
+    )
+    assert result is CacheClass.HEALTHY
+
+
+def test_gap_is_measured_between_request_starts_not_completions() -> None:
+    # Both requests finished 310 s apart, but the second streamed for 20 s: its start was 290 s
+    # after the predecessor's, inside the 300 s TTL.
+    slow = request(read=0, write=4000, gap_s=310, latency_ms=20_000)
+    within = classify(slow, previous(write=4000), APPEND, rows(breakpoint_at=1), ANTHROPIC)
+    assert within is CacheClass.UNEXPLAINED
+    fast = request(read=0, write=4000, gap_s=310)
+    expired = classify(fast, previous(write=4000), APPEND, rows(breakpoint_at=1), ANTHROPIC)
+    assert expired is CacheClass.TTL_EXPIRED
+
+
+def test_predecessor_latency_moves_its_start_earlier() -> None:
+    # Predecessor completed at T0 after 30 s, so it started 30 s earlier: the gap grows by 30 s.
+    record = request(read=0, write=4000, gap_s=280)
+    result = classify(
+        record, previous(write=4000, latency_ms=30_000), APPEND, rows(breakpoint_at=1), ANTHROPIC
+    )
+    assert result is CacheClass.TTL_EXPIRED
 
 
 def test_unknown_cache_read_is_not_reported_not_zero() -> None:
