@@ -1,8 +1,8 @@
 ---
 doc: SECURITY
 status: draft
-last_verified_commit: none (pre-repo)
-updated: 2026-09-25
+last_verified_commit: a4a0cda
+updated: 2026-11-03
 ---
 
 # Security
@@ -38,6 +38,8 @@ Plain version: this gateway sees every prompt, every answer, and every API key t
 - G-5 Every cache entry and stored body has an expiry.
 
 ## Per-gate checklist
+This is the template. Each gate's ticked copy, with evidence, is in `reviews/phase-N-gate.md`.
+
 - [ ] Secret scan clean (gitleaks) on the phase diff (enforced in CI on every PR).
 - [ ] Workflow changes: read-only default permissions, actions pinned, no new secrets exposed to PR builds.
 - [ ] Grep test: no provider key substrings in DB, logs, or fixtures (for every registered upstream and auth style).

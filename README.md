@@ -143,7 +143,7 @@ admin token) are reserved for later phases. The full table is in
 ## Roadmap
 
 Delivery is one milestone per branch and pull request, with a written gate review at the end of each
-phase (`reviews/`). 13 of 28 milestones are done.
+phase (`reviews/`). 12 of 28 milestones are done.
 
 | Phase | Scope | Status |
 |---|---|---|

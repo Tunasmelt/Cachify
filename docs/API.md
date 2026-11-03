@@ -1,14 +1,14 @@
 ---
 doc: API
 status: draft
-last_verified_commit: none (pre-repo)
-updated: 2026-09-25
+last_verified_commit: a4a0cda
+updated: 2026-11-03
 ---
 
 # API
 
 ## Own API
-Generated from OpenAPI (`/openapi.json`) once Phase 5 lands. Until then, planned surface:
+Generated from OpenAPI (`/openapi.json`) once Phase 5 lands. Until then, this is the planned surface. **Implemented today (Phase 2):** `POST /v1/messages`, `POST /v1/chat/completions`, their `/u/{upstream}/` forms, and the request headers `x-pcg-upstream` and `x-pcg-session`. Everything else below (other proxy routes, `x-pcg-cache`, `x-pcg-log`, `x-pcg-tags`, the response headers and all admin routes) is not built yet.
 
 ### Proxy
 | Method | Path | Auth | Notes |

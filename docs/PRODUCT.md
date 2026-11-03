@@ -2,8 +2,8 @@
 doc: PRODUCT
 project: prompt-cache-gateway (working name)
 status: draft
-last_verified_commit: none (pre-repo)
-updated: 2026-09-25
+last_verified_commit: a4a0cda
+updated: 2026-11-03
 ---
 
 # Product: Prompt Cache Gateway
@@ -99,4 +99,4 @@ Two components behind one proxy:
 - OQ-2: Embedding model: local (e.g. a small sentence-transformers / fastembed model) vs. API embeddings. Local keeps it free and fast; dimension must fit the chosen store's free-tier limit.
 - OQ-3: Lineage inference window: how many recent requests to compare, and over what time window. Resolved in M2.2: 50 requests / 3600 s, configurable.
 - OQ-4: Should semantic cache consider more than the final user turn for multi-turn conversations (e.g. last N turns hashed into the fingerprint)?
-- OQ-5: Final project name.
+- OQ-5: Final project name. Currently "Cachify" (product and repo), `pcg` (Python package, env prefix `PCG_`), "Prompt Cache Gateway" (original working name, still in this doc's title).

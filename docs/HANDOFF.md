@@ -1,8 +1,8 @@
 ---
 doc: HANDOFF
 status: overwritten each session
-last_verified_commit: none (pre-repo)
-updated: 2026-10-24
+last_verified_commit: a4a0cda
+updated: 2026-11-03
 ---
 
 # Handoff
@@ -21,4 +21,5 @@ updated: 2026-10-24
 - Qdrant Cloud: cluster URL and API key are in the local gitignored `.env`; connection not yet tested. The key was pasted into chat, so rotate it.
 - Re-verify provider caching facts in API.md before each provider's phase (Anthropic before Phase 1, OpenAI-chat before Phase 2, others before Phase 5).
 - `dependabot.yml` uses `package-ecosystem: "pip"`; GitHub's `"uv"` ecosystem may be more precise, unverified — low priority.
-- OQ-5: project name.
+- OQ-5: project name (see PRODUCT.md for the current naming).
+- `PCG_LOG_MODE=off` still stores hashes and lineage; confirm that is the intent (G2 open item).
